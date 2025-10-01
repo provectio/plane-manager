@@ -89,7 +89,7 @@ sudo docker-compose -f docker-compose.prod.yml ps
 
 # Vérifier la santé de l'application
 echo "🏥 Vérification de la santé de l'application..."
-if curl -f http://localhost:3020/api/load-data > /dev/null 2>&1; then
+if curl -f http://localhost:3020/ > /dev/null 2>&1; then
     echo "✅ Application démarrée avec succès!"
     echo "🌐 Application accessible sur: http://localhost:3020"
     echo "🔧 API accessible sur: http://localhost:3020/api/"

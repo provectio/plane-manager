@@ -19,11 +19,83 @@ const PORT = process.env.PORT || 3020;
 app.use(cors());
 app.use(express.json());
 
+// Servir les fichiers statiques de l'application React
+app.use(express.static(path.join(__dirname, 'dist')));
+
 // Créer le répertoire data s'il n'existe pas
 const dataDir = path.join(__dirname, 'data');
 if (!fs.existsSync(dataDir)) {
   fs.mkdirSync(dataDir, { recursive: true });
 }
+
+// Initialiser les fichiers de données par défaut s'ils n'existent pas
+const initializeDefaultData = () => {
+  const defaultTeams = [
+    {
+      id: "team-1",
+      name: "Développement",
+      color: "#3B82F6",
+      description: "Équipe de développement logiciel"
+    },
+    {
+      id: "team-2", 
+      name: "Infrastructure",
+      color: "#10B981",
+      description: "Équipe infrastructure et DevOps"
+    },
+    {
+      id: "team-3",
+      name: "Support",
+      color: "#F59E0B", 
+      description: "Équipe support technique"
+    }
+  ];
+
+  const defaultTemplates = [
+    {
+      id: "template-1",
+      name: "Template Développement",
+      description: "Template pour les projets de développement",
+      team: "Développement",
+      icon: "💻",
+      tasks: []
+    },
+    {
+      id: "template-2",
+      name: "Template Infrastructure", 
+      description: "Template pour les projets infrastructure",
+      team: "Infrastructure",
+      icon: "🔧",
+      tasks: []
+    }
+  ];
+
+  const defaultMetadata = {
+    lastSync: null,
+    version: "1.0.0",
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  };
+
+  // Créer les fichiers s'ils n'existent pas
+  const files = [
+    { name: 'teams.json', data: defaultTeams },
+    { name: 'module-templates.json', data: defaultTemplates },
+    { name: 'projects.json', data: [] },
+    { name: 'metadata.json', data: defaultMetadata }
+  ];
+
+  files.forEach(file => {
+    const filePath = path.join(dataDir, file.name);
+    if (!fs.existsSync(filePath)) {
+      fs.writeFileSync(filePath, JSON.stringify(file.data, null, 2));
+      console.log(`📝 Fichier ${file.name} créé avec des données par défaut`);
+    }
+  });
+};
+
+// Initialiser les données au démarrage
+initializeDefaultData();
 
 // Route pour sauvegarder les données
 app.post('/api/save-data', (req, res) => {
@@ -95,8 +167,14 @@ app.get('/api/load-data', (req, res) => {
   }
 });
 
+// Route pour servir l'application React (SPA)
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, 'dist', 'index.html'));
+});
+
 // Démarrer le serveur
 app.listen(PORT, () => {
   console.log(`🚀 Serveur de données démarré sur le port ${PORT}`);
   console.log(`📁 Répertoire de données: ${dataDir}`);
+  console.log(`🌐 Application accessible sur: http://localhost:${PORT}`);
 });
