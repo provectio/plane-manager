@@ -10,8 +10,8 @@ WORKDIR /app
 # Cloner le repository GitHub
 RUN git clone https://github.com/provectio/plane-manager.git .
 
-# Installer les dépendances
-RUN npm ci --only=production
+# Installer toutes les dépendances (y compris dev dependencies pour le build)
+RUN npm ci
 
 # Build de l'application
 RUN npm run build

@@ -69,6 +69,12 @@ fi
 echo "🛑 Arrêt des conteneurs existants..."
 sudo docker-compose -f docker-compose.prod.yml down || true
 
+# Charger les variables d'environnement
+if [ -f ".env.production" ]; then
+    echo "📋 Chargement des variables d'environnement..."
+    export $(grep -v '^#' .env.production | xargs)
+fi
+
 # Construire et démarrer les nouveaux conteneurs
 echo "🔨 Construction et démarrage des conteneurs..."
 sudo docker-compose -f docker-compose.prod.yml up -d --build
