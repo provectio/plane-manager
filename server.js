@@ -167,9 +167,13 @@ app.get('/api/load-data', (req, res) => {
   }
 });
 
-// Route pour servir l'application React (SPA)
-app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, 'dist', 'index.html'));
+// Route pour servir l'application React (SPA) - catch-all pour les routes non-API
+app.use((req, res, next) => {
+  // Si ce n'est pas une route API, servir l'application React
+  if (!req.path.startsWith('/api/')) {
+    return res.sendFile(path.join(__dirname, 'dist', 'index.html'));
+  }
+  next();
 });
 
 // Démarrer le serveur
