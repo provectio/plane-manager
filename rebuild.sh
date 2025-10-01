@@ -5,46 +5,58 @@
 
 set -e
 
-echo "🔄 Reconstruction complète de Plane Manager"
+echo "🔨 Reconstruction complète de Plane Manager"
+echo "============================================="
+
+# Vérifier que nous sommes dans le bon répertoire
+if [ ! -f "docker-compose.yml" ]; then
+    echo "❌ Ce script doit être exécuté dans le répertoire du projet"
+    exit 1
+fi
 
 # Arrêter tous les conteneurs
 echo "🛑 Arrêt des conteneurs..."
-sudo docker-compose -f docker-compose.prod.yml down
+sudo docker-compose down || true
 
 # Supprimer l'image existante
 echo "🗑️  Suppression de l'image existante..."
-sudo docker rmi plane-manager_plane-manager:latest 2>/dev/null || echo "Image non trouvée, continuons..."
+sudo docker rmi plane-manager_plane-manager:latest || true
 
 # Nettoyer le cache Docker
 echo "🧹 Nettoyage du cache Docker..."
 sudo docker system prune -f
 
-# Reconstruire sans cache
-echo "🔨 Reconstruction complète (sans cache)..."
-sudo docker-compose -f docker-compose.prod.yml build --no-cache
+# Supprimer les volumes (ATTENTION: cela supprime les données)
+echo "⚠️  Suppression des volumes (données perdues)..."
+sudo docker volume rm plane-manager_plane_data || true
+sudo docker volume rm plane-manager_plane_logs || true
+
+# Reconstruire complètement sans cache
+echo "🔨 Reconstruction complète sans cache..."
+sudo docker-compose build --no-cache --pull
 
 # Démarrer les conteneurs
 echo "🚀 Démarrage des conteneurs..."
-sudo docker-compose -f docker-compose.prod.yml up -d
+sudo docker-compose up -d
 
-# Attendre le démarrage
+# Attendre que les services soient prêts
 echo "⏳ Attente du démarrage..."
-sleep 15
+sleep 20
 
 # Vérifier le statut
 echo "📊 Statut des conteneurs:"
-sudo docker-compose -f docker-compose.prod.yml ps
+sudo docker-compose ps
 
-# Afficher les logs récents
-echo "📋 Logs récents:"
-sudo docker-compose -f docker-compose.prod.yml logs --tail=20 plane-manager
-
-# Test de connectivité
-echo "🏥 Test de connectivité..."
-if curl -f http://localhost:3020/ > /dev/null 2>&1; then
-    echo "✅ Application accessible sur: http://localhost:3020"
+# Vérifier la santé
+echo "🏥 Vérification de la santé..."
+if curl -f http://localhost:3020/health > /dev/null 2>&1; then
+    echo "✅ Reconstruction terminée avec succès!"
+    echo "🌐 Application accessible sur: http://localhost:3020"
 else
-    echo "❌ Application non accessible"
-    echo "📋 Logs complets:"
-    sudo docker-compose -f docker-compose.prod.yml logs plane-manager
+    echo "❌ Problème lors de la reconstruction"
+    echo "📋 Logs des conteneurs:"
+    sudo docker-compose logs --tail=30
+    exit 1
 fi
+
+echo "🎉 Reconstruction complète terminée!"

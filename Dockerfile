@@ -10,6 +10,9 @@ WORKDIR /app
 # Cloner le repository GitHub
 RUN git clone https://github.com/provectio/plane-manager.git .
 
+# Copier le fichier d'environnement de production
+COPY .env.production ./
+
 # Installer toutes les dépendances (y compris dev dependencies pour le build)
 RUN npm ci
 
@@ -38,6 +41,9 @@ RUN npm ci --only=production && npm cache clean --force
 # Copier les fichiers buildés depuis le stage builder
 COPY --from=builder --chown=nextjs:nodejs /app/dist ./dist
 COPY --from=builder --chown=nextjs:nodejs /app/server.js ./
+
+# Copier le fichier d'environnement de production
+COPY --from=builder --chown=nextjs:nodejs /app/.env.production ./.env.production
 
 # Créer le répertoire pour les données persistantes
 RUN mkdir -p /app/data && chown -R nextjs:nodejs /app/data
