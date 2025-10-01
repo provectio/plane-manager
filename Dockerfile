@@ -10,9 +10,6 @@ WORKDIR /app
 # Cloner le repository GitHub
 RUN git clone https://github.com/provectio/plane-manager.git .
 
-# Copier le fichier d'environnement de production
-COPY .env.production ./
-
 # Installer toutes les dépendances (y compris dev dependencies pour le build)
 RUN npm ci
 

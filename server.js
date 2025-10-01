@@ -177,7 +177,7 @@ app.get('/health', (req, res) => {
 });
 
 // Route catch-all pour servir l'application React (SPA)
-app.get('*', (req, res) => {
+app.use((req, res) => {
   res.sendFile(path.join(__dirname, 'dist', 'index.html'));
 });
 
