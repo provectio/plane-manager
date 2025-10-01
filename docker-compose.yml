@@ -6,10 +6,10 @@ services:
     container_name: plane-manager-app
     restart: unless-stopped
     ports:
-      - "3001:3001"
+      - "3020:3020"
     environment:
       - NODE_ENV=production
-      - PORT=3001
+      - PORT=3020
     volumes:
       # Volume persistant pour les données JSON
       - plane_data:/app/data
@@ -18,7 +18,7 @@ services:
     networks:
       - plane-network
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3001/api/load-data"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3020/api/load-data"]
       interval: 30s
       timeout: 10s
       retries: 3

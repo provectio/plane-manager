@@ -122,10 +122,10 @@ sudo docker-compose -f docker-compose.prod.yml logs -f
 ### Test de santé
 ```bash
 # Test de l'API
-curl -f http://localhost:3001/api/load-data
+curl -f http://localhost:3020/api/load-data
 
 # Test de l'interface web
-curl -f http://localhost:3001/
+curl -f http://localhost:3020/
 ```
 
 ### Vérification des volumes
@@ -259,7 +259,7 @@ sudo chown -R 1001:1001 /opt/plane-manager/data
 **Problème de réseau :**
 ```bash
 # Vérifier les ports
-sudo netstat -tlnp | grep :3001
+sudo netstat -tlnp | grep :3020
 sudo netstat -tlnp | grep :80
 ```
 
@@ -280,12 +280,12 @@ df -h
 En cas de problème :
 1. Consultez les logs : `sudo docker-compose -f docker-compose.prod.yml logs -f`
 2. Vérifiez la configuration : `sudo docker-compose -f docker-compose.prod.yml config`
-3. Testez la connectivité : `curl -f http://localhost:3001/api/load-data`
+3. Testez la connectivité : `curl -f http://localhost:3020/api/load-data`
 
 ---
 
 **🎉 Votre application Plane Manager est maintenant déployée en production !**
 
-- **Interface web** : http://votre-serveur:3001
-- **API** : http://votre-serveur:3001/api/
+- **Interface web** : http://votre-serveur:3020
+- **API** : http://votre-serveur:3020/api/
 - **Données persistantes** : Volume Docker `plane_data`

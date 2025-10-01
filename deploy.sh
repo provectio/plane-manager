@@ -70,10 +70,10 @@ sudo docker-compose ps
 
 # Vérifier la santé de l'application
 echo "🏥 Vérification de la santé de l'application..."
-if curl -f http://localhost:3001/api/load-data > /dev/null 2>&1; then
+if curl -f http://localhost:3020/api/load-data > /dev/null 2>&1; then
     echo "✅ Application démarrée avec succès!"
-    echo "🌐 Application accessible sur: http://localhost:3001"
-    echo "🔧 API accessible sur: http://localhost:3001/api/"
+    echo "🌐 Application accessible sur: http://localhost:3020"
+    echo "🔧 API accessible sur: http://localhost:3020/api/"
 else
     echo "❌ L'application ne répond pas correctement"
     echo "📋 Logs des conteneurs:"

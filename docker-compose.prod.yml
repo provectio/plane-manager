@@ -8,10 +8,10 @@ services:
     container_name: plane-manager-app
     restart: unless-stopped
     ports:
-      - "3001:3001"
+      - "3020:3020"
     environment:
       - NODE_ENV=production
-      - PORT=3001
+      - PORT=3020
       # Variables d'environnement pour Plane.so (à configurer)
       - VITE_PLANE_API_ENDPOINT=${VITE_PLANE_API_ENDPOINT}
       - VITE_PLANE_API_KEY=${VITE_PLANE_API_KEY}
@@ -24,7 +24,7 @@ services:
     networks:
       - plane-network
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3001/api/load-data"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3020/api/load-data"]
       interval: 30s
       timeout: 10s
       retries: 3

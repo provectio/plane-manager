@@ -76,11 +76,11 @@ docker-compose ps
 # Vérifier la santé de l'application
 Write-Host "🏥 Vérification de la santé de l'application..." -ForegroundColor Yellow
 try {
-    $response = Invoke-WebRequest -Uri "http://localhost:3001/api/load-data" -UseBasicParsing
+    $response = Invoke-WebRequest -Uri "http://localhost:3020/api/load-data" -UseBasicParsing
     if ($response.StatusCode -eq 200) {
         Write-Host "✅ Application démarrée avec succès!" -ForegroundColor Green
-        Write-Host "🌐 Application accessible sur: http://localhost:3001" -ForegroundColor Green
-        Write-Host "🔧 API accessible sur: http://localhost:3001/api/" -ForegroundColor Green
+        Write-Host "🌐 Application accessible sur: http://localhost:3020" -ForegroundColor Green
+        Write-Host "🔧 API accessible sur: http://localhost:3020/api/" -ForegroundColor Green
     }
 } catch {
     Write-Host "❌ L'application ne répond pas correctement" -ForegroundColor Red
