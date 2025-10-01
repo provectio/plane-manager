@@ -583,10 +583,36 @@ class PlaneApiService {
     }
   }
 
+  // Mettre à jour un module
+  async updateModule(projectId: string, moduleId: string, updates: any): Promise<any> {
+    try {
+      this.logPlaneAction('update_module', 'start', { projectId, moduleId, updates });
+      
+      const result = await this.makeRequest(
+        `/api/v1/workspaces/${PLANE_WORKSPACE_SLUG}/projects/${projectId}/modules/${moduleId}/`,
+        {
+          method: 'PATCH',
+          body: JSON.stringify(updates),
+        }
+      );
+
+      this.logPlaneAction('update_module', 'success', { 
+        projectId,
+        moduleId,
+        updates
+      });
+
+      return result;
+    } catch (error) {
+      this.logPlaneAction('update_module', 'error', { projectId, moduleId, updates }, error);
+      throw error;
+    }
+  }
+
   // Supprimer un module
   async deleteModule(projectId: string, moduleId: string): Promise<any> {
     try {
-      this.logPlaneAction('delete_module', 'success', { projectId, moduleId });
+      this.logPlaneAction('delete_module', 'start', { projectId, moduleId });
       
       const result = await this.makeRequest(
         `/api/v1/workspaces/${PLANE_WORKSPACE_SLUG}/projects/${projectId}/modules/${moduleId}/`,
@@ -603,6 +629,56 @@ class PlaneApiService {
       return result;
     } catch (error) {
       this.logPlaneAction('delete_module', 'error', { projectId, moduleId }, error);
+      throw error;
+    }
+  }
+
+  // Supprimer tous les modules de tous les projets
+  async deleteAllModules(): Promise<void> {
+    try {
+      console.log('🗑️ Starting deletion of all modules...');
+      
+      // Get all projects
+      const projectsResponse = await this.makeRequest(
+        `/api/v1/workspaces/${PLANE_WORKSPACE_SLUG}/projects/`
+      );
+      
+      const projects = projectsResponse.results || projectsResponse;
+      console.log(`📋 Found ${projects.length} projects`);
+      
+      for (const project of projects) {
+        console.log(`🔍 Processing project: ${project.name} (${project.id})`);
+        
+        try {
+          // Get all modules for this project
+          const modulesResponse = await this.makeRequest(
+            `/api/v1/workspaces/${PLANE_WORKSPACE_SLUG}/projects/${project.id}/modules/`
+          );
+          
+          const modules = modulesResponse.results || modulesResponse;
+          console.log(`📦 Found ${modules.length} modules in project ${project.name}`);
+          
+          // Delete each module
+          for (const module of modules) {
+            try {
+              console.log(`🗑️ Deleting module: ${module.name} (${module.id})`);
+              await this.deleteModule(project.id, module.id);
+              console.log(`✅ Module deleted: ${module.name}`);
+              
+              // Add delay between deletions to avoid rate limiting
+              await this.delay(500);
+            } catch (error) {
+              console.error(`❌ Failed to delete module ${module.name}:`, error);
+            }
+          }
+        } catch (error) {
+          console.error(`❌ Failed to process project ${project.name}:`, error);
+        }
+      }
+      
+      console.log('✅ All modules deletion completed');
+    } catch (error) {
+      console.error('❌ Failed to delete all modules:', error);
       throw error;
     }
   }
@@ -661,6 +737,9 @@ class PlaneApiService {
     try {
       this.logPlaneAction('delete_project', 'start', { projectId });
       
+      console.log(`🗑️ Attempting to delete project: ${projectId}`);
+      console.log(`🔗 API URL: /api/v1/workspaces/${PLANE_WORKSPACE_SLUG}/projects/${projectId}/`);
+      
       const result = await this.retryWithBackoff(() =>
         this.makeRequest(
           `/api/v1/workspaces/${PLANE_WORKSPACE_SLUG}/projects/${projectId}/`,
@@ -670,12 +749,28 @@ class PlaneApiService {
         )
       );
 
+      console.log(`✅ Project deleted successfully: ${projectId}`);
       this.logPlaneAction('delete_project', 'success', { 
         projectId 
       });
 
       return result;
     } catch (error) {
+      console.error(`❌ Failed to delete project ${projectId}:`, error);
+      
+      // Provide more specific error information
+      if (error instanceof PlaneApiError) {
+        console.error(`Status: ${error.status}, Body:`, error.body);
+        
+        if (error.status === 404) {
+          throw new Error('Le projet n\'existe plus dans Plane.so');
+        } else if (error.status === 403) {
+          throw new Error('Vous n\'avez pas les permissions pour supprimer ce projet');
+        } else if (error.status === 429) {
+          throw new Error('Trop de requêtes simultanées. Veuillez patienter et réessayer.');
+        }
+      }
+      
       this.logPlaneAction('delete_project', 'error', { projectId }, error);
       throw error;
     }
@@ -777,6 +872,393 @@ class PlaneApiService {
       throw error;
     }
   }
+
+  // Get project issues with their states for progress calculation
+  async getProjectIssues(projectId: string): Promise<any[]> {
+    try {
+      this.logPlaneAction('get_project_issues', 'start', { projectId });
+      
+      const response = await this.retryWithBackoff(() =>
+        this.makeRequest(
+          `/api/v1/workspaces/${PLANE_WORKSPACE_SLUG}/projects/${projectId}/issues/`
+        )
+      );
+
+      this.logPlaneAction('get_project_issues', 'success', { 
+        projectId, 
+        count: response.results?.length || 0 
+      });
+
+      return response.results || [];
+    } catch (error) {
+      this.logPlaneAction('get_project_issues', 'error', { projectId }, error);
+      throw error;
+    }
+  }
+
+  // ===== STATES MANAGEMENT =====
+
+  // Récupérer les states d'un projet
+  async getProjectStates(projectId: string): Promise<any[]> {
+    try {
+      this.logPlaneAction('get_project_states', 'start', { projectId });
+      
+      const response = await this.retryWithBackoff(() =>
+        this.makeRequest(
+          `/api/v1/workspaces/${PLANE_WORKSPACE_SLUG}/projects/${projectId}/states/`
+        )
+      );
+
+      this.logPlaneAction('get_project_states', 'success', { 
+        projectId, 
+        count: response.results?.length || 0 
+      });
+
+      return response.results || [];
+    } catch (error) {
+      this.logPlaneAction('get_project_states', 'error', { projectId }, error);
+      throw error;
+    }
+  }
+
+  // Créer un state personnalisé
+  async createState(projectId: string, name: string, color: string, description?: string): Promise<any> {
+    try {
+      this.logPlaneAction('create_state', 'start', { projectId, stateName: name, color });
+      
+      const payload = {
+        name,
+        color,
+        description: description || `State: ${name}`,
+      };
+      
+      await this.delay(200);
+      
+      const state = await this.retryWithBackoff(() =>
+        this.makeRequest(
+          `/api/v1/workspaces/${PLANE_WORKSPACE_SLUG}/projects/${projectId}/states/`,
+          {
+            method: 'POST',
+            body: JSON.stringify(payload),
+          }
+        )
+      );
+
+      this.logPlaneAction('create_state', 'success', { 
+        projectId, 
+        stateId: state.id, 
+        stateName: state.name 
+      });
+
+      return state;
+    } catch (error) {
+      this.logPlaneAction('create_state', 'error', { projectId, stateName: name, color }, error);
+      throw error;
+    }
+  }
+
+  // ===== ASSIGNEES MANAGEMENT =====
+
+  // Récupérer les utilisateurs du workspace
+  async getWorkspaceUsers(): Promise<any[]> {
+    try {
+      this.logPlaneAction('get_workspace_users', 'start', { workspaceSlug: PLANE_WORKSPACE_SLUG });
+      
+      const response = await this.retryWithBackoff(() =>
+        this.makeRequest(
+          `/api/v1/workspaces/${PLANE_WORKSPACE_SLUG}/users/`
+        )
+      );
+
+      this.logPlaneAction('get_workspace_users', 'success', { 
+        count: response.results?.length || 0 
+      });
+
+      return response.results || [];
+    } catch (error) {
+      this.logPlaneAction('get_workspace_users', 'error', { workspaceSlug: PLANE_WORKSPACE_SLUG }, error);
+      throw error;
+    }
+  }
+
+  // Assigner une issue à un utilisateur
+  async assignIssueToUser(projectId: string, issueId: string, userId: string): Promise<any> {
+    try {
+      this.logPlaneAction('assign_issue_to_user', 'start', { projectId, issueId, userId });
+      
+      const result = await this.updateIssue(projectId, issueId, {
+        assignees: [userId]
+      });
+
+      this.logPlaneAction('assign_issue_to_user', 'success', { 
+        projectId, 
+        issueId, 
+        userId 
+      });
+
+      return result;
+    } catch (error) {
+      this.logPlaneAction('assign_issue_to_user', 'error', { projectId, issueId, userId }, error);
+      throw error;
+    }
+  }
+
+  // Assigner une issue à plusieurs utilisateurs
+  async assignIssueToUsers(projectId: string, issueId: string, userIds: string[]): Promise<any> {
+    try {
+      this.logPlaneAction('assign_issue_to_users', 'start', { projectId, issueId, userIds });
+      
+      const result = await this.updateIssue(projectId, issueId, {
+        assignees: userIds
+      });
+
+      this.logPlaneAction('assign_issue_to_users', 'success', { 
+        projectId, 
+        issueId, 
+        userIds 
+      });
+
+      return result;
+    } catch (error) {
+      this.logPlaneAction('assign_issue_to_users', 'error', { projectId, issueId, userIds }, error);
+      throw error;
+    }
+  }
+
+  // ===== DATES MANAGEMENT =====
+
+  // Définir les dates d'une issue
+  async setIssueDates(projectId: string, issueId: string, startDate?: string, targetDate?: string): Promise<any> {
+    try {
+      this.logPlaneAction('set_issue_dates', 'start', { projectId, issueId, startDate, targetDate });
+      
+      const updateData: any = {};
+      if (startDate) updateData.start_date = startDate;
+      if (targetDate) updateData.target_date = targetDate;
+      
+      const result = await this.updateIssue(projectId, issueId, updateData);
+
+      this.logPlaneAction('set_issue_dates', 'success', { 
+        projectId, 
+        issueId, 
+        startDate, 
+        targetDate 
+      });
+
+      return result;
+    } catch (error) {
+      this.logPlaneAction('set_issue_dates', 'error', { projectId, issueId, startDate, targetDate }, error);
+      throw error;
+    }
+  }
+
+  // ===== IMPROVED SUB-ISSUES MANAGEMENT =====
+
+  // Créer une sous-tâche avec state et assigné
+  async createSubIssueWithState(
+    projectId: string, 
+    parentIssueId: string, 
+    name: string, 
+    description: string = '',
+    stateId?: string,
+    assigneeId?: string,
+    startDate?: string,
+    targetDate?: string
+  ): Promise<any> {
+    try {
+      this.logPlaneAction('create_sub_issue_with_state', 'start', { 
+        projectId, 
+        parentIssueId, 
+        issueName: name, 
+        stateId, 
+        assigneeId 
+      });
+      
+      // D'abord, créer l'issue normale
+      const issue = await this.createIssue(projectId, name, description);
+      
+      // Ensuite, la mettre à jour avec toutes les informations
+      const updateData: any = { parent: parentIssueId };
+      if (stateId) updateData.state = stateId;
+      if (assigneeId) updateData.assignees = [assigneeId];
+      if (startDate) updateData.start_date = startDate;
+      if (targetDate) updateData.target_date = targetDate;
+      
+      console.log('🔗 Linking sub-issue with full data:', updateData);
+      
+      await this.delay(300);
+      
+      const updatedIssue = await this.retryWithBackoff(() =>
+        this.makeRequest(
+          `/api/v1/workspaces/${PLANE_WORKSPACE_SLUG}/projects/${projectId}/issues/${issue.id}/`,
+          {
+            method: 'PATCH',
+            body: JSON.stringify(updateData),
+          }
+        )
+      );
+
+      this.logPlaneAction('create_sub_issue_with_state', 'success', { 
+        issueId: issue.id, 
+        projectId,
+        parentIssueId,
+        issueName: issue.name,
+        stateId,
+        assigneeId
+      });
+
+      return updatedIssue;
+    } catch (error) {
+      this.logPlaneAction('create_sub_issue_with_state', 'error', { 
+        projectId, 
+        parentIssueId, 
+        issueName: name, 
+        stateId, 
+        assigneeId 
+      }, error);
+      throw error;
+    }
+  }
+
+  // Créer une issue complète avec toutes les informations
+  async createCompleteIssue(
+    projectId: string,
+    name: string,
+    description: string = '',
+    stateId?: string,
+    assigneeIds?: string[],
+    startDate?: string,
+    targetDate?: string,
+    priority?: string,
+    labels?: string[]
+  ): Promise<any> {
+    try {
+      this.logPlaneAction('create_complete_issue', 'start', { 
+        projectId, 
+        issueName: name, 
+        stateId, 
+        assigneeIds,
+        priority,
+        labels
+      });
+      
+      const issueData: any = { name };
+      if (description) issueData.description = description;
+      if (stateId) issueData.state = stateId;
+      if (assigneeIds && assigneeIds.length > 0) issueData.assignees = assigneeIds;
+      if (startDate) issueData.start_date = startDate;
+      if (targetDate) issueData.target_date = targetDate;
+      if (priority) issueData.priority = priority;
+      if (labels && labels.length > 0) issueData.labels = labels;
+      
+      console.log('🚀 Creating complete issue with payload:', issueData);
+      
+      await this.delay(400);
+      
+      const issue = await this.retryWithBackoff(() =>
+        this.makeRequest(
+          `/api/v1/workspaces/${PLANE_WORKSPACE_SLUG}/projects/${projectId}/issues/`,
+          {
+            method: 'POST',
+            body: JSON.stringify(issueData),
+          }
+        )
+      );
+
+      this.logPlaneAction('create_complete_issue', 'success', { 
+        projectId, 
+        issueName: name, 
+        issueId: issue.id,
+        stateId,
+        assigneeIds,
+        priority,
+        labels
+      });
+
+      return issue;
+    } catch (error) {
+      this.logPlaneAction('create_complete_issue', 'error', { 
+        projectId, 
+        issueName: name, 
+        stateId, 
+        assigneeIds,
+        priority,
+        labels
+      }, error);
+      throw error;
+    }
+  }
+
+  // ===== PRIORITY MANAGEMENT =====
+
+  // Récupérer les priorités disponibles
+  async getProjectPriorities(projectId: string): Promise<any[]> {
+    try {
+      this.logPlaneAction('get_project_priorities', 'start', { projectId });
+      
+      const response = await this.retryWithBackoff(() =>
+        this.makeRequest(
+          `/api/v1/workspaces/${PLANE_WORKSPACE_SLUG}/projects/${projectId}/priorities/`
+        )
+      );
+
+      this.logPlaneAction('get_project_priorities', 'success', { 
+        projectId, 
+        count: response.results?.length || 0 
+      });
+
+      return response.results || [];
+    } catch (error) {
+      this.logPlaneAction('get_project_priorities', 'error', { projectId }, error);
+      throw error;
+    }
+  }
+
+  // ===== ENHANCED PROJECT SYNC =====
+
+  // Synchroniser complètement un projet avec toutes ses données
+  async syncProjectComplete(projectId: string): Promise<any> {
+    try {
+      this.logPlaneAction('sync_project_complete', 'start', { projectId });
+      
+      // Récupérer le projet avec tous ses détails
+      const project = await this.getProject(projectId);
+      
+      // Récupérer les states
+      const states = await this.getProjectStates(projectId);
+      
+      // Récupérer les priorités
+      const priorities = await this.getProjectPriorities(projectId);
+      
+      // Récupérer les utilisateurs
+      const users = await this.getWorkspaceUsers();
+      
+      // Récupérer les labels
+      const labels = await this.getLabels(projectId);
+
+      const completeProject = {
+        ...project,
+        states,
+        priorities,
+        users,
+        labels
+      };
+
+      this.logPlaneAction('sync_project_complete', 'success', { 
+        projectId,
+        statesCount: states.length,
+        prioritiesCount: priorities.length,
+        usersCount: users.length,
+        labelsCount: labels.length
+      });
+
+      return completeProject;
+    } catch (error) {
+      this.logPlaneAction('sync_project_complete', 'error', { projectId }, error);
+      throw error;
+    }
+  }
+
 }
 
 export const planeApi = new PlaneApiService();

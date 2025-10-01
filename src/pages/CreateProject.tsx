@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
@@ -7,17 +7,19 @@ import {
   CheckCircleIcon,
   ExclamationTriangleIcon,
 } from '@heroicons/react/24/outline';
-import { useAppStore } from '../store/useAppStore';
-import { useModuleTemplatesStore } from '../store/useModuleTemplatesStore';
-import { useTeamsStore } from '../store/useTeamsStore';
+import { useLocalDataStore } from '../store/useLocalDataStore';
+import { useProjectStore } from '../store/useProjectStore';
+// Migration désactivée - faite dans App.tsx
 import { TeamType } from '../types';
 import TeamSelector from '../components/TeamSelector';
 import TeamModulesGrid from '../components/TeamModulesGrid';
 
 export default function CreateProject() {
   const navigate = useNavigate();
-  const { createProject } = useAppStore();
-  const { templates, getTemplatesByTeam } = useModuleTemplatesStore();
+  const { data: localData } = useLocalDataStore();
+  const { createProject } = useProjectStore();
+  
+  // Migration automatique des données au chargement - désactivé (fait dans App.tsx)
   
   const [currentStep, setCurrentStep] = useState(1);
   const [projectName, setProjectName] = useState('');
@@ -40,9 +42,9 @@ export default function CreateProject() {
 
   const getAvailableTemplates = () => {
     if (selectedTeam) {
-      return getTemplatesByTeam(selectedTeam);
+      return localData.moduleTemplates.filter(t => t.team === selectedTeam);
     }
-    return templates;
+    return localData.moduleTemplates;
   };
 
   const toggleModule = (templateId: string) => {
@@ -65,7 +67,7 @@ export default function CreateProject() {
 
     try {
       const selectedTemplateNames = selectedModules.map(id => {
-        const template = templates.find(t => t.id === id);
+        const template = localData.moduleTemplates.find(t => t.id === id);
         return template?.name || id;
       });
 
@@ -78,10 +80,18 @@ export default function CreateProject() {
 
       // Show success message immediately
       setProjectCreated(true);
-      setCreationStep('Commande créée avec succès ! Synchronisation en cours...');
+      setCreationStep(`Pour la commande Salesforce ${projectName} ! Synchronisation en cours...`);
+
+      // Project will be saved by createProject function
 
       // Start project creation in background (optimistic update)
-      createProject(projectData).catch(error => {
+      // Pass the complete module objects with team information
+      const projectDataWithModules = {
+        ...projectData,
+        modules: selectedTemplateNames // Pass the selected module names
+      };
+      
+      createProject(projectDataWithModules).catch(error => {
         console.error('Background sync failed:', error);
         // Error handling is done in the store
       });
@@ -117,20 +127,20 @@ export default function CreateProject() {
       {/* Progress Steps */}
       <div className="mb-8">
         <div className="flex items-center space-x-4">
-          <div className={`flex items-center space-x-2 ${currentStep >= 1 ? 'text-monday-500' : 'text-gray-400'}`}>
+          <div className={`flex items-center space-x-2 ${currentStep >= 1 ? 'text-blue-500' : 'text-gray-400'}`}>
             <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
-              currentStep >= 1 ? 'bg-monday-500 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-500'
+              currentStep >= 1 ? 'bg-blue-500 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-500'
             }`}>
               {currentStep > 1 ? <CheckCircleIcon className="w-5 h-5" /> : '1'}
             </div>
             <span className="text-sm font-medium">Informations</span>
           </div>
           
-          <div className={`flex-1 h-0.5 ${currentStep >= 2 ? 'bg-monday-500' : 'bg-gray-200 dark:bg-gray-700'}`} />
+          <div className={`flex-1 h-0.5 ${currentStep >= 2 ? 'bg-blue-500' : 'bg-gray-200 dark:bg-gray-700'}`} />
           
-          <div className={`flex items-center space-x-2 ${currentStep >= 2 ? 'text-monday-500' : 'text-gray-400'}`}>
+          <div className={`flex items-center space-x-2 ${currentStep >= 2 ? 'text-blue-500' : 'text-gray-400'}`}>
             <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
-              currentStep >= 2 ? 'bg-monday-500 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-500'
+              currentStep >= 2 ? 'bg-blue-500 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-500'
             }`}>
               {currentStep > 2 ? <CheckCircleIcon className="w-5 h-5" /> : '2'}
             </div>
@@ -163,7 +173,7 @@ export default function CreateProject() {
                   type="text"
                   value={projectName}
                   onChange={(e) => setProjectName(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-monday-500 focus:border-transparent"
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   placeholder="Ex: 00004554"
                 />
                 {nameExists && (
@@ -179,7 +189,7 @@ export default function CreateProject() {
                   value={projectDescription}
                   onChange={(e) => setProjectDescription(e.target.value)}
                   rows={3}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-monday-500 focus:border-transparent"
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   placeholder="Décrivez brièvement votre projet..."
                 />
               </div>
@@ -220,7 +230,7 @@ export default function CreateProject() {
               onTeamSelect={setSelectedTeam}
               className="mb-6"
               selectedModules={selectedModules}
-              templates={templates}
+              templates={localData.moduleTemplates}
             />
 
             {/* Team Modules Grid */}
@@ -254,7 +264,7 @@ export default function CreateProject() {
                     </>
                   ) : (
                     <>
-                      <span>Créer la commande</span>
+                      <span>Créer le projet</span>
                       <CheckCircleIcon className="w-5 h-5" />
                     </>
                   )}

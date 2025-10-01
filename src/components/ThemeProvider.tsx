@@ -1,5 +1,4 @@
 import { createContext, useContext, useEffect, useState } from 'react';
-import { useAppStore } from '../store/useAppStore';
 
 interface ThemeContextType {
   theme: 'light' | 'dark';
@@ -21,7 +20,11 @@ interface ThemeProviderProps {
 }
 
 export default function ThemeProvider({ children }: ThemeProviderProps) {
-  const { theme, setTheme } = useAppStore();
+  // Removed useAppStore - using local state only
+  const [theme, setTheme] = useState({
+    mode: 'light' as 'light' | 'dark',
+    primaryColor: '#3b82f6'
+  });
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -36,7 +39,7 @@ export default function ThemeProvider({ children }: ThemeProviderProps) {
 
   const toggleTheme = () => {
     const newMode = theme.mode === 'light' ? 'dark' : 'light';
-    setTheme({ mode: newMode });
+    setTheme(prev => ({ ...prev, mode: newMode }));
   };
 
   if (!mounted) {

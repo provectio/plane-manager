@@ -1,77 +1,101 @@
 #!/bin/bash
 
-# Script de déploiement pour Monday Manager
-# Usage: ./deploy.sh [production|staging]
+# Script de déploiement pour Plane Manager
+# Usage: ./deploy.sh [environment]
 
 set -e
 
+# Configuration
+REPO_URL="https://github.com/provectio/plane-manager.git"
+APP_NAME="plane-manager"
 ENVIRONMENT=${1:-production}
-PROJECT_NAME="monday-manager"
-DOCKER_DIR="/opt/docker/monday-manager"
 
-echo "🚀 Déploiement de Monday Manager en mode $ENVIRONMENT"
+echo "🚀 Déploiement de Plane Manager - Environnement: $ENVIRONMENT"
+echo "📦 Repository: $REPO_URL"
 
 # Vérifier que Docker est installé
 if ! command -v docker &> /dev/null; then
-    echo "❌ Docker n'est pas installé"
+    echo "❌ Docker n'est pas installé. Veuillez installer Docker d'abord."
     exit 1
 fi
 
+# Vérifier que Docker Compose est installé
 if ! command -v docker-compose &> /dev/null; then
-    echo "❌ Docker Compose n'est pas installé"
+    echo "❌ Docker Compose n'est pas installé. Veuillez installer Docker Compose d'abord."
     exit 1
 fi
 
-# Créer le répertoire de déploiement
-echo "📁 Création du répertoire de déploiement..."
-sudo mkdir -p $DOCKER_DIR
-sudo chown $USER:$USER $DOCKER_DIR
+# Créer le répertoire de déploiement s'il n'existe pas
+DEPLOY_DIR="/opt/plane-manager"
+echo "📁 Répertoire de déploiement: $DEPLOY_DIR"
 
-# Copier les fichiers nécessaires
-echo "📋 Copie des fichiers de configuration..."
-cp docker-compose.yml $DOCKER_DIR/
-cp Dockerfile $DOCKER_DIR/
-cp nginx.conf $DOCKER_DIR/
-cp -r monitoring $DOCKER_DIR/
-
-# Copier le code source
-echo "📦 Copie du code source..."
-rsync -av --exclude='node_modules' --exclude='.git' --exclude='dist' . $DOCKER_DIR/
-
-# Aller dans le répertoire de déploiement
-cd $DOCKER_DIR
-
-# Créer le fichier .env si il n'existe pas
-if [ ! -f .env ]; then
-    echo "⚙️ Création du fichier .env..."
-    cp env.example .env
-    echo "⚠️  N'oubliez pas de configurer les variables d'environnement dans .env"
+if [ ! -d "$DEPLOY_DIR" ]; then
+    echo "📂 Création du répertoire de déploiement..."
+    sudo mkdir -p "$DEPLOY_DIR"
 fi
 
-# Construire et démarrer les services
-echo "🔨 Construction des images Docker..."
-docker-compose build --no-cache
+# Cloner ou mettre à jour le repository
+if [ -d "$DEPLOY_DIR/.git" ]; then
+    echo "🔄 Mise à jour du repository..."
+    cd "$DEPLOY_DIR"
+    sudo git pull origin main
+else
+    echo "📥 Clonage du repository..."
+    sudo git clone "$REPO_URL" "$DEPLOY_DIR"
+    cd "$DEPLOY_DIR"
+fi
 
-echo "🚀 Démarrage des services..."
-docker-compose up -d
+# Copier les fichiers de configuration si nécessaire
+if [ ! -f "$DEPLOY_DIR/.env.production" ]; then
+    echo "⚙️  Création du fichier de configuration de production..."
+    sudo cp "$DEPLOY_DIR/.env.example" "$DEPLOY_DIR/.env.production"
+    echo "📝 Veuillez configurer le fichier .env.production avec vos paramètres"
+fi
 
-# Vérifier le statut des services
-echo "🔍 Vérification du statut des services..."
-docker-compose ps
+# Arrêter les conteneurs existants
+echo "🛑 Arrêt des conteneurs existants..."
+sudo docker-compose down || true
 
-# Afficher les logs
-echo "📊 Logs des services:"
-docker-compose logs --tail=50
+# Construire et démarrer les nouveaux conteneurs
+echo "🔨 Construction et démarrage des conteneurs..."
+sudo docker-compose up -d --build
 
-echo "✅ Déploiement terminé!"
-echo "🌐 Application disponible sur: http://localhost:3010"
-echo "📊 Grafana disponible sur: http://localhost:3000"
-echo "📈 Prometheus disponible sur: http://localhost:9090"
+# Attendre que les services soient prêts
+echo "⏳ Attente du démarrage des services..."
+sleep 10
 
-# Commandes utiles
+# Vérifier le statut des conteneurs
+echo "📊 Statut des conteneurs:"
+sudo docker-compose ps
+
+# Vérifier la santé de l'application
+echo "🏥 Vérification de la santé de l'application..."
+if curl -f http://localhost:3001/api/load-data > /dev/null 2>&1; then
+    echo "✅ Application démarrée avec succès!"
+    echo "🌐 Application accessible sur: http://localhost:3001"
+    echo "🔧 API accessible sur: http://localhost:3001/api/"
+else
+    echo "❌ L'application ne répond pas correctement"
+    echo "📋 Logs des conteneurs:"
+    sudo docker-compose logs --tail=50
+    exit 1
+fi
+
+# Afficher les informations de déploiement
+echo ""
+echo "🎉 Déploiement terminé avec succès!"
+echo "📊 Informations de déploiement:"
+echo "   - Application: $APP_NAME"
+echo "   - Environnement: $ENVIRONMENT"
+echo "   - Repository: $REPO_URL"
+echo "   - Répertoire: $DEPLOY_DIR"
 echo ""
 echo "🔧 Commandes utiles:"
-echo "  - Voir les logs: docker-compose logs -f"
-echo "  - Redémarrer: docker-compose restart"
-echo "  - Arrêter: docker-compose down"
-echo "  - Mise à jour: docker-compose pull && docker-compose up -d"
+echo "   - Voir les logs: sudo docker-compose logs -f"
+echo "   - Redémarrer: sudo docker-compose restart"
+echo "   - Arrêter: sudo docker-compose down"
+echo "   - Mettre à jour: ./deploy.sh"
+echo ""
+echo "📁 Données persistantes:"
+echo "   - Volume des données: plane_data"
+echo "   - Volume des logs: plane_logs"

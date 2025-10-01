@@ -5,14 +5,12 @@ import {
   DocumentTextIcon,
   CheckCircleIcon
 } from '@heroicons/react/24/outline';
-import { useTeamsStore } from '../store/useTeamsStore';
-import { useModuleTemplatesStore } from '../store/useModuleTemplatesStore';
-import { useAppStore } from '../store/useAppStore';
+import { useLocalDataStore } from '../store/useLocalDataStore';
 
 export default function TeamStats() {
-  const { teams } = useTeamsStore();
-  const { templates } = useModuleTemplatesStore();
-  const { projects } = useAppStore();
+  // Using only local data store
+  const { data: localData } = useLocalDataStore();
+  const { teams, moduleTemplates: templates, projects } = localData;
 
   // Calculate statistics
   const totalModules = projects.reduce((acc, project) => acc + project.modules.length, 0);

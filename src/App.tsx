@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-import { useAppStore } from './store/useAppStore';
+import { useLocalDataStore } from './store/useLocalDataStore';
+import { migrateToLocalStorage } from './utils/dataMigration';
+import { progressSyncService } from './services/progressSyncService';
 import Layout from './components/Layout';
 import Dashboard from './pages/Dashboard';
 import CreateProject from './pages/CreateProject';
@@ -11,7 +13,39 @@ import Administration from './pages/Administration';
 import ThemeProvider from './components/ThemeProvider';
 
 function App() {
-  const { setApiStatus, loadProjectsFromPlane } = useAppStore();
+  // Removed useAppStore - using local state only
+  
+  // Migration unique des données au démarrage de l'application
+  useEffect(() => {
+    const initializeApp = async () => {
+      try {
+        // Migration des anciennes données
+        migrateToLocalStorage();
+        
+        // Initialisation du stockage backend
+        const { initializeBackendStorage, loadFromBackend } = useLocalDataStore.getState();
+        await initializeBackendStorage();
+        
+        // Charger les données depuis le serveur backend
+        try {
+          await loadFromBackend();
+        } catch (error) {
+          console.error('Erreur lors du chargement depuis le serveur:', error);
+        }
+        
+        // Data migration is no longer needed with direct file storage
+        
+        // Démarrer la synchronisation automatique de l'avancement
+        progressSyncService.startAutoSync();
+        
+        console.log('✅ Application initialisée avec stockage fichier et synchronisation automatique');
+      } catch (error) {
+        console.error('❌ Erreur lors de l\'initialisation:', error);
+      }
+    };
+    
+    initializeApp();
+  }, []);
   const [isConfigured, setIsConfigured] = useState(false);
   const [isChecking, setIsChecking] = useState(true);
 
@@ -25,25 +59,20 @@ function App() {
         const workspaceSlug = import.meta.env.VITE_PLANE_WORKSPACE_SLUG;
         const isConnected = !!(apiKey && workspaceSlug);
         
-        setApiStatus({
-          isConnected,
-          lastChecked: new Date().toISOString(),
-        });
+        // Removed setApiStatus - using local state only
         
         if (isConnected) {
-          // Load projects from Plane.so
-          await loadProjectsFromPlane();
+          // Add prefixes to all templates first - désactivé
+          // addPrefixToAllTemplates();
+          
+          // Application is configured - no automatic sync with Plane.so
           setIsConfigured(true);
         } else {
           setIsConfigured(false);
         }
       } catch (error) {
         console.error('Plane.so API connection failed:', error);
-        setApiStatus({
-          isConnected: false,
-          lastChecked: new Date().toISOString(),
-          error: 'Impossible de se connecter à Plane.so. Vérifiez votre clé API et workspace slug.',
-        });
+        // Removed setApiStatus - using local state only
         setIsConfigured(false);
       } finally {
         setIsChecking(false);
@@ -51,7 +80,7 @@ function App() {
     };
 
     checkConfiguration();
-  }, [setApiStatus, loadProjectsFromPlane]);
+  }, []);
 
   // Afficher un loader pendant la vérification
   if (isChecking) {

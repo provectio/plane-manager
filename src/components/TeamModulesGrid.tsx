@@ -1,9 +1,9 @@
 import { motion } from 'framer-motion';
 import { useState } from 'react';
 import { ChevronDownIcon, ChevronRightIcon } from '@heroicons/react/24/outline';
-import { ModuleTemplate } from '../store/useModuleTemplatesStore';
+import { LocalModuleTemplate as ModuleTemplate } from '../store/useLocalDataStore';
 import { TeamType } from '../types';
-import { useTeamsStore } from '../store/useTeamsStore';
+import { useLocalDataStore } from '../store/useLocalDataStore';
 
 interface TeamModulesGridProps {
   templates: ModuleTemplate[];
@@ -20,7 +20,8 @@ export default function TeamModulesGrid({
   selectedTeam,
   loading = false 
 }: TeamModulesGridProps) {
-  const { teams } = useTeamsStore();
+  const { data: localData } = useLocalDataStore();
+  const { teams } = localData;
   const [expandedTeams, setExpandedTeams] = useState<Set<string>>(new Set());
 
   // Group templates by team

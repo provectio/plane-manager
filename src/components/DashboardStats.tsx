@@ -1,12 +1,14 @@
 import React from 'react';
-import { useAppStore } from '../store/useAppStore';
 import { 
   DocumentTextIcon, 
   ChartBarIcon 
 } from '@heroicons/react/24/outline';
+import { useLocalDataStore } from '../store/useLocalDataStore';
 
 export default function DashboardStats() {
-  const { projects } = useAppStore();
+  // Removed useAppStore - using local data only
+  const { data: localData } = useLocalDataStore();
+  const projects = localData.projects;
 
   // Calculer les statistiques
   const totalProjects = projects.length;

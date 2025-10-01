@@ -1,6 +1,5 @@
 import { motion } from 'framer-motion';
 import { useTheme } from '../components/ThemeProvider';
-import ApiConfig from '../components/ApiConfig';
 
 export default function Settings() {
   const { theme, toggleTheme } = useTheme();
@@ -17,14 +16,6 @@ export default function Settings() {
         </p>
       </div>
 
-      {/* API Configuration */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3 }}
-      >
-        <ApiConfig />
-      </motion.div>
 
       {/* Theme Settings */}
       <motion.div

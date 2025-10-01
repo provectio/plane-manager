@@ -6,8 +6,8 @@ import {
   CheckIcon,
 } from '@heroicons/react/24/outline';
 import { Project, Module, TeamType } from '../types';
-import { useTeamsStore } from '../store/useTeamsStore';
-import { useModuleTemplatesStore } from '../store/useModuleTemplatesStore';
+import { useLocalDataStore } from '../store/useLocalDataStore';
+// Migration désactivée - faite dans App.tsx
 import SubTaskModal from './SubTaskModal';
 
 interface TeamModulesManagerProps {
@@ -45,24 +45,35 @@ export default function TeamModulesManager({
   modulesBeingAdded,
   modulesBeingDeleted
 }: TeamModulesManagerProps) {
-  const { teams } = useTeamsStore();
-  const { templates } = useModuleTemplatesStore();
+  const { data: localData, addTeam, addModuleTemplate } = useLocalDataStore();
   const [selectedTeam, setSelectedTeam] = useState<TeamType | null>(null);
   const [forceUpdate, setForceUpdate] = useState(0);
   const [showSubTaskModal, setShowSubTaskModal] = useState<{ moduleId: string; taskId: string; taskName: string } | null>(null);
 
+  // Migration automatique des données au chargement - désactivé (fait dans App.tsx)
+
 
   const getModuleInfo = (moduleName: string) => {
-    return templates.find(template => template.name === moduleName) || templates[0];
+    return localData.moduleTemplates.find(template => template.name === moduleName) || localData.moduleTemplates[0];
   };
 
-  // Ensure modules have correct team assignment
+  // Extract original module name without team prefix
+  const getOriginalModuleName = (moduleName: string) => {
+    // Remove pattern like [Team] from the beginning
+    const match = moduleName.match(/^\[.*?\]\s*(.+)$/);
+    return match ? match[1] : moduleName;
+  };
+
+  // Ensure modules have correct team assignment and prefix
   const ensureModuleTeams = () => {
     let hasChanges = false;
     project.modules.forEach(module => {
-      if (!module.team) {
-        const template = templates.find(t => t.name === module.name);
-        if (template) {
+      const originalName = getOriginalModuleName(module.name);
+      const template = localData.moduleTemplates.find(t => t.name === originalName);
+      
+      if (template) {
+        // Ensure team is set correctly - fix if wrong team
+        if (!module.team || module.team !== template.team) {
           module.team = template.team;
           hasChanges = true;
           console.log(`Fixed team for module ${module.name}: ${template.team}`);
@@ -71,6 +82,10 @@ export default function TeamModulesManager({
     });
     
     if (hasChanges) {
+      // Update local storage
+      const { updateProject } = useLocalDataStore.getState();
+      updateProject(project.id, { modules: project.modules });
+      
       // Force re-render
       setForceUpdate(prev => prev + 1);
     }
@@ -83,7 +98,7 @@ export default function TeamModulesManager({
 
   // Count modules per team for badges
   const getModulesCountByTeam = (teamName: TeamType) => {
-    if (!project?.modules || !Array.isArray(project.modules) || !templates || !Array.isArray(templates)) {
+    if (!project?.modules || !Array.isArray(project.modules) || !localData.moduleTemplates || !Array.isArray(localData.moduleTemplates)) {
       return 0;
     }
     
@@ -94,12 +109,21 @@ export default function TeamModulesManager({
       }
       
       // Fallback to template lookup
-      const template = templates.find(t => t.name === module.name);
+      const template = localData.moduleTemplates.find(t => t.name === module.name);
       return template?.team === teamName;
     }).length;
     
     return count;
   };
+
+  // Debug logs
+  console.log('🔍 TeamModulesManager Debug:', {
+    moduleTemplates: localData.moduleTemplates?.length || 0,
+    teams: localData.teams?.length || 0,
+    projectModules: project.modules?.length || 0,
+    selectedTeam,
+    templates: localData.moduleTemplates
+  });
 
   return (
     <div className="space-y-4">
@@ -129,7 +153,7 @@ export default function TeamModulesManager({
             {selectedTeam === null && <CheckIcon className="w-4 h-4" />}
           </button>
           
-          {teams && Array.isArray(teams) && teams.map((team) => {
+          {localData.teams && Array.isArray(localData.teams) && localData.teams.map((team) => {
             const moduleCount = getModulesCountByTeam(team.name);
             return (
               <button
@@ -163,11 +187,19 @@ export default function TeamModulesManager({
       {/* Modules List */}
       <div className="space-y-2">
         <AnimatePresence>
-          {templates
+          {localData.moduleTemplates
             .filter(template => !selectedTeam || template.team === selectedTeam)
                     .map((template) => {
-                      const isAlreadyAdded = project.modules.some(m => m.name === template.name);
-                      const existingModule = project.modules.find(m => m.name === template.name);
+                      const isAlreadyAdded = project.modules.some(m => getOriginalModuleName(m.name) === template.name);
+                      const existingModule = project.modules.find(m => getOriginalModuleName(m.name) === template.name);
+                      
+                      // Debug logs
+                      console.log(`🔍 Template: ${template.name}`);
+                      console.log(`📋 Project modules:`, project.modules.map(m => m.name));
+                      console.log(`🔍 Template name without prefix: ${getOriginalModuleName(template.name)}`);
+                      console.log(`🔍 Project module names without prefix:`, project.modules.map(m => `${m.name} -> ${getOriginalModuleName(m.name)}`));
+                      console.log(`✅ Is already added:`, isAlreadyAdded);
+                      console.log(`🔍 Existing module:`, existingModule?.name);
                       
               
               return (
@@ -178,9 +210,18 @@ export default function TeamModulesManager({
                   exit={{ opacity: 0, scale: 0.9 }}
                   className="w-full p-3 rounded-lg border transition-all duration-200 flex items-center justify-between bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700"
                 >
-                  <div className="flex items-center space-x-3">
+                  <div className="flex items-start space-x-3">
                     <span className="text-xl">{template.icon}</span>
                     <div className="flex-1 min-w-0">
+                      {/* Tag d'équipe en haut */}
+                      <div className="mb-2">
+                        <span 
+                          className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium text-white bg-blue-500"
+                        >
+                          {template.team}
+                        </span>
+                      </div>
+                      
                       <h4 className="font-medium text-gray-900 dark:text-white">
                         {template.name}
                       </h4>

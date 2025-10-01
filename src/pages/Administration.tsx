@@ -1,25 +1,29 @@
 import { motion } from 'framer-motion';
 import { useState } from 'react';
 import { useTheme } from '../components/ThemeProvider';
-import ApiConfig from '../components/ApiConfig';
 import TeamManagement from '../components/TeamManagement';
+import DataManagement from './DataManagement';
+import { useLocalDataStore } from '../store/useLocalDataStore';
 import { 
   CogIcon, 
   UserGroupIcon, 
-  ServerIcon,
-  InformationCircleIcon
+  InformationCircleIcon,
+  CircleStackIcon
 } from '@heroicons/react/24/outline';
 
 export default function Administration() {
   const { theme, toggleTheme } = useTheme();
-  const [activeTab, setActiveTab] = useState('api');
+  // Removed useAppStore - using local state only
+  const isLoading = false;
+  const [activeTab, setActiveTab] = useState('teams');
 
   const tabs = [
-    { id: 'api', name: 'Configuration API', icon: ServerIcon },
     { id: 'teams', name: 'Gestion des équipes', icon: UserGroupIcon },
+    { id: 'data', name: 'Gestion des données', icon: CircleStackIcon },
     { id: 'appearance', name: 'Apparence', icon: CogIcon },
     { id: 'about', name: 'À propos', icon: InformationCircleIcon },
   ];
+
 
   return (
     <div className="max-w-6xl mx-auto space-y-6">
@@ -63,15 +67,16 @@ export default function Administration() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.3 }}
       >
-        {activeTab === 'api' && (
-          <div>
-            <ApiConfig />
-          </div>
-        )}
 
         {activeTab === 'teams' && (
           <div>
             <TeamManagement />
+          </div>
+        )}
+
+        {activeTab === 'data' && (
+          <div>
+            <DataManagement />
           </div>
         )}
 
@@ -122,6 +127,7 @@ export default function Administration() {
           </div>
         )}
       </motion.div>
+
     </div>
   );
 }

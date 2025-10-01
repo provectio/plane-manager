@@ -1,39 +1,17 @@
-# Dependencies
+# Dépendances
 node_modules
 npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
 
-# Build outputs
+# Build
 dist
 build
-.next
 
-# Environment files
+# Environnement
 .env
 .env.local
 .env.development.local
 .env.test.local
 .env.production.local
-
-# IDE files
-.vscode
-.idea
-*.swp
-*.swo
-
-# OS files
-.DS_Store
-Thumbs.db
-
-# Git
-.git
-.gitignore
-
-# Docker
-Dockerfile
-docker-compose.yml
-.dockerignore
 
 # Logs
 logs
@@ -66,27 +44,40 @@ jspm_packages/
 # Yarn Integrity file
 .yarn-integrity
 
-# parcel-bundler cache (https://parceljs.org/)
-.cache
-.parcel-cache
+# dotenv environment variables file
+.env
 
-# next.js build output
-.next
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
 
-# nuxt.js build output
-.nuxt
+# OS
+.DS_Store
+Thumbs.db
 
-# vuepress build output
-.vuepress/dist
+# Git
+.git
+.gitignore
 
-# Serverless directories
-.serverless
+# Docker
+Dockerfile
+docker-compose.yml
+.dockerignore
 
-# FuseBox cache
-.fusebox/
+# Documentation
+README.md
+*.md
 
-# DynamoDB Local files
-.dynamodb/
+# Tests
+test
+tests
+__tests__
 
-# TernJS port file
-.tern-port
+# Temporary files
+tmp
+temp
+
+# Data directory (sera monté comme volume)
+data

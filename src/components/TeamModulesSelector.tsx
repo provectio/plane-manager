@@ -1,9 +1,9 @@
 import { motion } from 'framer-motion';
 import { useState } from 'react';
 import { ChevronDownIcon, ChevronRightIcon, TagIcon } from '@heroicons/react/24/outline';
-import { ModuleTemplate } from '../store/useModuleTemplatesStore';
+import { LocalModuleTemplate as ModuleTemplate } from '../store/useLocalDataStore';
 import { TeamType } from '../types';
-import { useTeamsStore } from '../store/useTeamsStore';
+import { useLocalDataStore } from '../store/useLocalDataStore';
 
 interface TeamModulesSelectorProps {
   templates: ModuleTemplate[];
@@ -20,7 +20,8 @@ export default function TeamModulesSelector({
   selectedTeam,
   loading = false
 }: TeamModulesSelectorProps) {
-  const { teams } = useTeamsStore();
+  const { data: localData } = useLocalDataStore();
+  const { teams } = localData;
   const [expandedTeams, setExpandedTeams] = useState<Set<string>>(new Set());
 
   // Group templates by team
@@ -72,11 +73,11 @@ export default function TeamModulesSelector({
                 <div className="flex items-center space-x-3">
                   <span className="text-2xl">{team?.icon}</span>
                   <div>
-                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                      {teamName}
-                    </h3>
-                    <div className="flex items-center space-x-2 mt-1">
-                      <span className="px-2 py-1 bg-gray-100 dark:bg-gray-700 rounded text-xs font-mono text-gray-600 dark:text-gray-400">
+                    <div className="flex items-center space-x-2">
+                      <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                        {teamName}
+                      </h3>
+                      <span className="px-1.5 py-0.5 bg-gray-100 dark:bg-gray-700 rounded text-xs font-mono text-gray-600 dark:text-gray-400">
                         {team?.trigramme}
                       </span>
                     </div>

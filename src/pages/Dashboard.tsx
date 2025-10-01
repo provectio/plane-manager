@@ -12,27 +12,49 @@ import {
   Bars3Icon,
   ChevronDownIcon
 } from '@heroicons/react/24/outline';
-import { useAppStore } from '../store/useAppStore';
+import { useLocalDataStore } from '../store/useLocalDataStore';
+import { progressSyncService } from '../services/progressSyncService';
+// Migration désactivée - faite dans App.tsx
 import { Project } from '../types';
+import { LocalProject } from '../store/useLocalDataStore';
 
 export default function Dashboard() {
-  const { projects, loadProjectsFromPlane, isLoading, isRefreshing, setError, startAutoSync } = useAppStore();
+  const { data: localData } = useLocalDataStore();
+  // Removed useAppStore - using local data only
+  
+  // Migration automatique des données au chargement - désactivé (fait dans App.tsx)
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [searchTerm, setSearchTerm] = useState('');
   const [sortBy, setSortBy] = useState<'name_asc' | 'name_desc' | 'date_desc' | 'date_asc' | 'progress_desc' | 'progress_asc'>('date_desc');
   const [showSortOptions, setShowSortOptions] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [lastSyncTime, setLastSyncTime] = useState<Date | null>(null);
+
+  // Fonction de synchronisation manuelle
+  const handleManualSync = async () => {
+    if (isSyncing) return;
+    
+    setIsSyncing(true);
+    try {
+      const results = await progressSyncService.manualSync();
+      setLastSyncTime(new Date());
+      
+      if (results.length > 0) {
+        const updatedCount = results.filter(r => r.updated).length;
+        console.log(`✅ Synchronisation terminée: ${updatedCount} projets mis à jour`);
+      }
+    } catch (error) {
+      console.error('❌ Erreur lors de la synchronisation:', error);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
 
   useEffect(() => {
-    // Load projects with cache (useCache = true by default)
-    loadProjects();
-    // Start auto-sync when component mounts
-    startAutoSync();
-    
-    // Cleanup auto-sync when component unmounts
-    return () => {
-      useAppStore.getState().stopAutoSync();
-    };
-  }, []);
+    // Dashboard is now using local data only - no automatic sync with Plane.so
+    console.log('Dashboard loaded - using local data only');
+    console.log('Local projects:', localData.projects.length);
+  }, [localData.projects.length]);
 
   // Close sort dropdown when clicking outside
   useEffect(() => {
@@ -48,24 +70,16 @@ export default function Dashboard() {
     };
   }, [showSortOptions]);
 
-  const loadProjects = async () => {
-    try {
-      // Use cache by default (useCache = true)
-      await loadProjectsFromPlane(true);
-    } catch (error) {
-      setError('Erreur lors du chargement des projets');
-      console.error('Error loading projects:', error);
-    }
-  };
+  // Removed loadProjects function - using local data only
 
 
-  const getModuleCount = useCallback((project: Project) => project.modules.length, []);
-  const getTaskCount = useCallback((project: Project) => 
+  const getModuleCount = useCallback((project: LocalProject) => project.modules.length, []);
+  const getTaskCount = useCallback((project: LocalProject) => 
     project.modules.reduce((total, module) => total + module.tasks.length, 0), []);
 
   // Filter and sort projects - memoized for performance
   const filteredProjects = useMemo(() => {
-    const filtered = projects
+    const filtered = localData.projects
       .filter(project => !project.name.includes('Sous-éléments de')) // Filter out sub-item boards
       .filter(project =>
       project.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -103,9 +117,9 @@ export default function Dashboard() {
     });
     
     return sorted;
-  }, [projects, searchTerm, sortBy]);
+  }, [localData.projects, searchTerm, sortBy]);
 
-  if (isLoading) {
+  if (false) { // Removed loading state
     return (
       <div className="flex items-center justify-center h-64">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
@@ -131,14 +145,14 @@ export default function Dashboard() {
                    <div className="flex items-center space-x-4">
                      <div className="flex items-center space-x-2 bg-white dark:bg-gray-800 px-3 py-2 rounded-full shadow-sm border border-gray-200 dark:border-gray-600">
                        <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
-                       <span className="text-sm font-bold text-blue-600 dark:text-blue-400">{projects.length}</span>
+                       <span className="text-sm font-bold text-blue-600 dark:text-blue-400">{localData.projects.length}</span>
                        <span className="text-xs text-gray-600 dark:text-gray-400">projets</span>
                      </div>
                      
                      <div className="flex items-center space-x-2 bg-white dark:bg-gray-800 px-3 py-2 rounded-full shadow-sm border border-gray-200 dark:border-gray-600">
                        <div className="w-3 h-3 bg-green-500 rounded-full"></div>
                        <span className="text-sm font-bold text-green-600 dark:text-green-400">
-                         {projects.reduce((acc, project) => {
+                         {localData.projects.reduce((acc, project) => {
                            return acc + project.modules.reduce((moduleAcc, module) => {
                              return moduleAcc + module.tasks.length;
                            }, 0);
@@ -150,7 +164,7 @@ export default function Dashboard() {
                      <div className="flex items-center space-x-2 bg-white dark:bg-gray-800 px-3 py-2 rounded-full shadow-sm border border-gray-200 dark:border-gray-600">
                        <div className="w-3 h-3 bg-purple-500 rounded-full"></div>
                        <span className="text-sm font-bold text-purple-600 dark:text-purple-400">
-                         {projects.reduce((acc, project) => {
+                         {localData.projects.reduce((acc, project) => {
                            return acc + project.modules.filter(module => module.tasks.length > 0).length;
                          }, 0)}
                        </span>
@@ -160,10 +174,8 @@ export default function Dashboard() {
 
                    {/* Cache Status */}
                    <div className="flex items-center space-x-2 text-xs text-gray-400 dark:text-gray-500">
-                     <div className={`w-2 h-2 rounded-full ${
-                       isRefreshing ? 'bg-yellow-500 animate-pulse' : 'bg-green-500'
-                     }`}></div>
-                     <span>{isRefreshing ? 'Sync en cours...' : 'Cache actif'}</span>
+                     <div className="w-2 h-2 rounded-full bg-green-500"></div>
+                     <span>Cache actif</span>
                      </div>
                    
                    {/* View Mode Toggle */}
@@ -207,6 +219,27 @@ export default function Dashboard() {
             />
           </div>
 
+
+          {/* Sync Button */}
+          <div className="flex items-center space-x-2">
+            <button
+              onClick={handleManualSync}
+              disabled={isSyncing}
+              className={`flex items-center space-x-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                isSyncing
+                  ? 'bg-gray-100 dark:bg-gray-700 text-gray-400 cursor-not-allowed'
+                  : 'bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/30'
+              }`}
+            >
+              <ArrowPathIcon className={`w-4 h-4 ${isSyncing ? 'animate-spin' : ''}`} />
+              <span>{isSyncing ? 'Sync...' : 'Sync avancement'}</span>
+            </button>
+            {lastSyncTime && (
+              <span className="text-xs text-gray-500 dark:text-gray-400">
+                Dernière sync: {lastSyncTime.toLocaleTimeString()}
+              </span>
+            )}
+          </div>
 
           {/* Sort Bar */}
           <div className="flex items-center space-x-4">
@@ -317,7 +350,6 @@ export default function Dashboard() {
           </div>
           
           <div className="flex items-center space-x-2 text-sm text-gray-500 dark:text-gray-400">
-            <span>{filteredProjects.length} projet{filteredProjects.length !== 1 ? 's' : ''}</span>
               <span className="text-xs bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded">
                 {sortBy === 'name_asc' ? 'A-Z' : 
                  sortBy === 'name_desc' ? 'Z-A' :

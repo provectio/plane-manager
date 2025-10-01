@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test IndexedDB - Plane Manager</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        .success { background-color: #d4edda; border-color: #c3e6cb; }
+        .error { background-color: #f8d7da; border-color: #f5c6cb; }
+        .info { background-color: #d1ecf1; border-color: #bee5eb; }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover { background: #0056b3; }
+        .log {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            padding: 10px;
+            border-radius: 5px;
+            font-family: monospace;
+            white-space: pre-wrap;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧪 Test IndexedDB - Plane Manager</h1>
+        
+        <div class="test-section info">
+            <h3>📋 Instructions de test</h3>
+            <p>1. Cliquez sur "Vider le cache" pour nettoyer localStorage</p>
+            <p>2. Cliquez sur "Tester IndexedDB" pour vérifier le fonctionnement</p>
+            <p>3. Ouvrez l'application dans un nouvel onglet</p>
+            <p>4. Testez en navigation privée</p>
+        </div>
+
+        <div class="test-section">
+            <h3>🔧 Actions de test</h3>
+            <button onclick="clearCache()">🗑️ Vider le cache</button>
+            <button onclick="testIndexedDB()">🧪 Tester IndexedDB</button>
+            <button onclick="checkData()">📊 Vérifier les données</button>
+            <button onclick="clearLog()">🧹 Nettoyer les logs</button>
+        </div>
+
+        <div class="test-section">
+            <h3>📝 Logs de test</h3>
+            <div id="log" class="log"></div>
+        </div>
+
+        <div class="test-section">
+            <h3>🔗 Liens de test</h3>
+            <p><a href="http://localhost:3001" target="_blank">🚀 Ouvrir l'application</a></p>
+            <p><a href="http://localhost:3001" target="_blank" onclick="window.open(this.href, '_blank', 'private'); return false;">🔒 Ouvrir en navigation privée</a></p>
+        </div>
+    </div>
+
+    <script>
+        function log(message, type = 'info') {
+            const logDiv = document.getElementById('log');
+            const timestamp = new Date().toLocaleTimeString();
+            const logEntry = `[${timestamp}] ${message}\n`;
+            logDiv.textContent += logEntry;
+            logDiv.scrollTop = logDiv.scrollHeight;
+            
+            // Mettre à jour l'interface
+            const testSection = logDiv.closest('.test-section');
+            testSection.className = `test-section ${type}`;
+        }
+
+        function clearLog() {
+            document.getElementById('log').textContent = '';
+        }
+
+        function clearCache() {
+            try {
+                // Vider localStorage
+                localStorage.clear();
+                log('✅ localStorage vidé', 'success');
+                
+                // Vider sessionStorage
+                sessionStorage.clear();
+                log('✅ sessionStorage vidé', 'success');
+                
+                // Essayer de vider IndexedDB
+                if ('indexedDB' in window) {
+                    const deleteRequest = indexedDB.deleteDatabase('PlaneManagerDB');
+                    deleteRequest.onsuccess = () => {
+                        log('✅ IndexedDB vidé', 'success');
+                    };
+                    deleteRequest.onerror = () => {
+                        log('⚠️ Impossible de vider IndexedDB (normal)', 'info');
+                    };
+                } else {
+                    log('⚠️ IndexedDB non supporté', 'error');
+                }
+                
+                log('🎉 Cache complètement vidé !', 'success');
+            } catch (error) {
+                log(`❌ Erreur lors du vidage: ${error.message}`, 'error');
+            }
+        }
+
+        function testIndexedDB() {
+            if (!('indexedDB' in window)) {
+                log('❌ IndexedDB non supporté par ce navigateur', 'error');
+                return;
+            }
+
+            log('🧪 Test d\'IndexedDB en cours...', 'info');
+            
+            const request = indexedDB.open('PlaneManagerDB', 1);
+            
+            request.onerror = () => {
+                log('❌ Erreur lors de l\'ouverture d\'IndexedDB', 'error');
+            };
+            
+            request.onsuccess = () => {
+                log('✅ IndexedDB ouvert avec succès', 'success');
+                const db = request.result;
+                
+                // Tester l'écriture
+                const transaction = db.transaction(['appData'], 'readwrite');
+                const store = transaction.objectStore('appData');
+                
+                const testData = {
+                    id: 'test',
+                    type: 'test',
+                    data: { message: 'Test IndexedDB', timestamp: Date.now() },
+                    timestamp: Date.now()
+                };
+                
+                const putRequest = store.put(testData);
+                putRequest.onsuccess = () => {
+                    log('✅ Écriture dans IndexedDB réussie', 'success');
+                    
+                    // Tester la lecture
+                    const getRequest = store.get('test');
+                    getRequest.onsuccess = () => {
+                        if (getRequest.result) {
+                            log('✅ Lecture depuis IndexedDB réussie', 'success');
+                            log(`📄 Données lues: ${JSON.stringify(getRequest.result)}`, 'info');
+                        } else {
+                            log('❌ Aucune donnée trouvée', 'error');
+                        }
+                    };
+                    getRequest.onerror = () => {
+                        log('❌ Erreur lors de la lecture', 'error');
+                    };
+                };
+                putRequest.onerror = () => {
+                    log('❌ Erreur lors de l\'écriture', 'error');
+                };
+            };
+            
+            request.onupgradeneeded = () => {
+                log('🔄 Mise à jour d\'IndexedDB en cours...', 'info');
+                const db = request.result;
+                
+                if (!db.objectStoreNames.contains('appData')) {
+                    const store = db.createObjectStore('appData', { keyPath: 'id' });
+                    store.createIndex('type', 'type', { unique: false });
+                    log('✅ Store IndexedDB créé', 'success');
+                }
+            };
+        }
+
+        function checkData() {
+            log('📊 Vérification des données...', 'info');
+            
+            // Vérifier localStorage
+            const localData = localStorage.getItem('local-data-storage');
+            if (localData) {
+                log('📦 Données trouvées dans localStorage', 'info');
+                try {
+                    const parsed = JSON.parse(localData);
+                    log(`📄 Équipes: ${parsed.state?.data?.teams?.length || 0}`, 'info');
+                    log(`📄 Modèles: ${parsed.state?.data?.moduleTemplates?.length || 0}`, 'info');
+                    log(`📄 Projets: ${parsed.state?.data?.projects?.length || 0}`, 'info');
+                } catch (e) {
+                    log('❌ Erreur de parsing localStorage', 'error');
+                }
+            } else {
+                log('📦 Aucune donnée dans localStorage', 'info');
+            }
+            
+            // Vérifier IndexedDB
+            if ('indexedDB' in window) {
+                const request = indexedDB.open('PlaneManagerDB', 1);
+                request.onsuccess = () => {
+                    const db = request.result;
+                    const transaction = db.transaction(['appData'], 'readonly');
+                    const store = transaction.objectStore('appData');
+                    const countRequest = store.count();
+                    
+                    countRequest.onsuccess = () => {
+                        log(`📦 ${countRequest.result} entrées dans IndexedDB`, 'info');
+                    };
+                };
+            }
+        }
+
+        // Test automatique au chargement
+        window.onload = () => {
+            log('🚀 Page de test chargée', 'info');
+            log('💡 Cliquez sur "Vider le cache" puis "Tester IndexedDB"', 'info');
+        };
+    </script>
+</body>
+</html>

@@ -1,0 +1,171 @@
+[
+  {
+    "id": "local_1759319304401_59xf6une2",
+    "name": "Serveur",
+    "description": "",
+    "team": "Infrasctruture",
+    "tasks": [
+      {
+        "name": "",
+        "subTasks": []
+      }
+    ],
+    "icon": "🏗️"
+  },
+  {
+    "id": "local_1759319539672_8e926ssep",
+    "name": "Création d'un lien internet",
+    "description": "",
+    "team": "Télécom",
+    "tasks": [
+      {
+        "name": "Validation des prérequis",
+        "subTasks": [
+          {
+            "name": "Contact client",
+            "status": "todo",
+            "assignedPerson": "",
+            "id": "subtask_1759319367096_0ye3u3aeg",
+            "mondaySubItemId": null
+          },
+          {
+            "name": "Location du site de raccordement",
+            "status": "todo",
+            "assignedPerson": "",
+            "id": "subtask_1759319348134_ga0l6jd6q",
+            "mondaySubItemId": null
+          },
+          {
+            "name": "Date souhaitée",
+            "status": "todo",
+            "assignedPerson": "",
+            "id": "subtask_1759319382155_8x9g4eu9x",
+            "mondaySubItemId": null
+          },
+          {
+            "name": "Environnement coffret/baie",
+            "status": "todo",
+            "assignedPerson": "",
+            "id": "subtask_1759319359311_njac3b7fu",
+            "mondaySubItemId": null
+          }
+        ]
+      },
+      {
+        "name": "Lancement de la production vers l'OI"
+      },
+      {
+        "name": "Confirmation de la date de construction avec l'OI"
+      },
+      {
+        "name": "Mise en service par l'OI"
+      },
+      {
+        "name": "Préparation de la configuration du lien en coeur de réseau"
+      },
+      {
+        "name": "Confirmation de l'IMES"
+      },
+      {
+        "name": "Tests et recette"
+      },
+      {
+        "name": "Passage en exploitation",
+        "subTasks": [
+          {
+            "name": "Intégration à la supervision",
+            "status": "todo",
+            "assignedPerson": "",
+            "id": "subtask_1759319484500_326fvwsse",
+            "mondaySubItemId": null
+          },
+          {
+            "name": "Mise à jour des outils et documentation",
+            "status": "todo",
+            "assignedPerson": "",
+            "id": "subtask_1759319536621_slfcx2itr",
+            "mondaySubItemId": null
+          }
+        ]
+      }
+    ],
+    "icon": "📡"
+  },
+  {
+    "id": "local_1759319565787_sbywka9y1",
+    "name": "Firewall",
+    "description": "",
+    "team": "Cybersécurité",
+    "tasks": [
+      {
+        "name": ""
+      }
+    ],
+    "icon": "🔒"
+  },
+  {
+    "id": "local_1759319578343_6qmwuaduj",
+    "name": "EPP/EDR/XDR",
+    "description": "",
+    "team": "Cybersécurité",
+    "tasks": [
+      {
+        "name": "",
+        "subTasks": []
+      }
+    ],
+    "icon": "🔒"
+  },
+  {
+    "id": "local_1759319582581_rp4ykkn3d",
+    "name": "MDR (SOC)",
+    "description": "",
+    "team": "Cybersécurité",
+    "tasks": [
+      {
+        "name": "",
+        "subTasks": []
+      }
+    ],
+    "icon": "🔒"
+  },
+  {
+    "id": "local_1759319599765_yyk433rgo",
+    "name": "ProCyber",
+    "description": "",
+    "team": "Cybersécurité",
+    "tasks": [
+      {
+        "name": "",
+        "subTasks": []
+      }
+    ],
+    "icon": "🔒"
+  },
+  {
+    "id": "local_1759319638216_z9fk4bwiu",
+    "name": "Création d'un VM hébergée",
+    "description": "",
+    "team": "Cloud",
+    "tasks": [
+      {
+        "name": "",
+        "subTasks": []
+      }
+    ],
+    "icon": "☁️"
+  },
+  {
+    "id": "local_1759319675717_yxtxlq2sl",
+    "name": "Onboarding d'un contrat d'infogérance",
+    "description": "",
+    "team": "Infogérance",
+    "tasks": [
+      {
+        "name": "",
+        "subTasks": []
+      }
+    ],
+    "icon": "🔧"
+  }
+]

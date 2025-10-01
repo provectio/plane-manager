@@ -9,25 +9,31 @@ import {
   ExclamationTriangleIcon,
   ArrowPathIcon
 } from '@heroicons/react/24/outline';
-import { useAppStore } from '../store/useAppStore';
-import { useModuleTemplatesStore } from '../store/useModuleTemplatesStore';
+import { useLocalDataStore } from '../store/useLocalDataStore';
+import { useProjectStore } from '../store/useProjectStore';
+// Migration désactivée - faite dans App.tsx
 import { Project, ModuleType, ModuleStatus, ProjectStatus, TeamType } from '../types';
 import TeamModulesManager from '../components/TeamModulesManager';
 import Toast from '../components/Toast';
+import { PlaneApiTester } from '../components/PlaneApiTester';
 
 
 export default function ProjectSettings() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { projects, addModuleToProject, removeModuleFromProject, updateModuleInProject, addSubTaskToTask, updateSubTaskInTask, removeSubTaskFromTask, deleteProject, setError, manualSync, refreshProject } = useAppStore();
-  const { templates } = useModuleTemplatesStore();
+  const { data: localData } = useLocalDataStore();
+  const { addModuleToProject, removeModuleFromProject, deleteProject } = useProjectStore();
+  
+  // Migration automatique des données au chargement - désactivé (fait dans App.tsx)
   const [project, setProject] = useState<Project | null>(null);
   const [loading, setLoading] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showProjectDeleteConfirm, setShowProjectDeleteConfirm] = useState<{ id: string; name: string } | null>(null);
   const [isManualSyncing, setIsManualSyncing] = useState(false);
   const [newTaskNames, setNewTaskNames] = useState<Record<string, string>>({});
   const [showModuleDeleteConfirm, setShowModuleDeleteConfirm] = useState<{ id: string; name: string } | null>(null);
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
+  const [projectDeleteConfirmText, setProjectDeleteConfirmText] = useState('');
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info'; isVisible: boolean }>({
     message: '',
     type: 'success',
@@ -35,6 +41,7 @@ export default function ProjectSettings() {
   });
   const [modulesBeingAdded, setModulesBeingAdded] = useState<Set<string>>(new Set());
   const [modulesBeingDeleted, setModulesBeingDeleted] = useState<Set<string>>(new Set());
+  const [refreshKey, setRefreshKey] = useState(0);
 
   const showToast = (message: string, type: 'success' | 'error' | 'info' = 'success') => {
     setToast({ message, type, isVisible: true });
@@ -45,19 +52,19 @@ export default function ProjectSettings() {
   };
 
   useEffect(() => {
-    const foundProject = projects.find(p => p.id === id);
+    const foundProject = localData.projects.find(p => p.id === id);
     if (foundProject) {
       setProject(foundProject);
     } else {
       navigate('/');
     }
-  }, [id, projects, navigate]);
+  }, [id, localData.projects, navigate]);
 
 
   // Sync local project state with store when projects change
   useEffect(() => {
-    if (project && projects.length > 0) {
-      const updatedProject = projects.find(p => p.id === project.id);
+    if (project && localData.projects.length > 0) {
+      const updatedProject = localData.projects.find(p => p.id === project.id);
       if (updatedProject) {
         // Only update if the modules have actually changed
         const modulesChanged = JSON.stringify(updatedProject.modules) !== JSON.stringify(project.modules);
@@ -66,13 +73,52 @@ export default function ProjectSettings() {
         }
       }
     }
-  }, [projects, project]);
+  }, [localData.projects, project]);
 
+  // Function to get original module name (without prefix)
+  const getOriginalModuleName = (moduleName: string) => {
+    const match = moduleName.match(/^\[.*?\]\s*(.+)$/);
+    return match ? match[1] : moduleName;
+  };
+
+  // Ensure modules have correct team assignment
+  const ensureModuleTeams = () => {
+    if (!project) return;
+    
+    let hasChanges = false;
+    const updatedModules = project.modules.map(module => {
+      const originalName = getOriginalModuleName(module.name);
+      const template = localData.moduleTemplates.find(t => t.name === originalName);
+      
+      if (template && (!module.team || module.team !== template.team)) {
+        hasChanges = true;
+        console.log(`Fixing team for module ${module.name}: ${template.team}`);
+        return { ...module, team: template.team };
+      }
+      return module;
+    });
+    
+    if (hasChanges) {
+      // Update local storage
+      const { updateProject } = useLocalDataStore.getState();
+      updateProject(project.id, { modules: updatedModules });
+      
+      // Update local state
+      setProject({ ...project, modules: updatedModules });
+    }
+  };
+
+  // Call this when project loads
+  useEffect(() => {
+    if (project) {
+      ensureModuleTeams();
+    }
+  }, [project?.id, localData.moduleTemplates]);
 
   const handleAddModule = async (moduleName: string) => {
     if (!project || loading) return;
 
-    const moduleInfo = templates.find(t => t.name === moduleName);
+    const moduleInfo = localData.moduleTemplates.find(t => t.name === moduleName);
     if (!moduleInfo) return;
 
     // Check if module already exists
@@ -85,60 +131,26 @@ export default function ProjectSettings() {
       // Mark module as being added (for UI state)
       setModulesBeingAdded(prev => new Set(prev).add(moduleName));
       
-      // Optimistically update the UI immediately
-            const newModule = {
-              id: `temp_${Date.now()}_${Math.random()}`,
-              name: moduleInfo.name,
-              type: moduleInfo.name as ModuleType,
-              team: moduleInfo.team,
-              planeModuleId: `temp_${Date.now()}_${Math.random()}`,
-              status: 'not_started' as ModuleStatus,
-              tasks: []
-            };
-
-      // Update local state immediately
-      setProject(prev => ({
-        ...prev!,
-        modules: [...prev!.modules, newModule]
-      }));
-
-      // Show success message immediately
-      showToast(`Module "${moduleInfo.name}" ajouté avec succès !`, 'success');
-
-      // Add module to project with optimistic update and error handling
-      try {
-        await addModuleToProject(project.id, moduleInfo.name);
-        // Success - remove from being added state
-        setModulesBeingAdded(prev => {
-          const newSet = new Set(prev);
-          newSet.delete(moduleName);
-          return newSet;
-        });
-      } catch (error) {
-        console.error('Background sync failed:', error);
-        
-        // Rollback: remove module from UI and show error
-        setProject(prev => ({
-          ...prev!,
-          modules: prev!.modules.filter(m => m.name !== moduleName)
-        }));
-        
-        // Remove from being added state
-        setModulesBeingAdded(prev => {
-          const newSet = new Set(prev);
-          newSet.delete(moduleName);
-          return newSet;
-        });
-        
-        // Show error message
-        showToast(`Erreur lors de l'ajout du module "${moduleInfo.name}"`, 'error');
+      // Add module to Plane.so and update local storage
+      await addModuleToProject(project.id, moduleName);
+      
+      // Refresh project data from local storage after successful creation
+      // Get fresh data from the store after the update
+      const { data: freshLocalData } = useLocalDataStore.getState();
+      const updatedProject = freshLocalData.projects.find(p => p.id === project.id);
+      if (updatedProject) {
+        setProject(updatedProject);
+        setRefreshKey(prev => prev + 1); // Force re-render
+        console.log('🔄 Project state updated after module addition');
+        console.log('📋 Updated project modules:', updatedProject.modules.map(m => m.name));
       }
       
+      showToast(`Module "${moduleName}" ajouté avec succès !`);
     } catch (error) {
-      setError('Erreur lors de l\'ajout du module');
-      console.error('Error adding module:', error);
-      
-      // Remove from being added state on error
+      console.error('❌ Error creating module in Plane.so:', error);
+      showToast(`Erreur lors de l'ajout du module "${moduleName}"`, 'error');
+    } finally {
+      // Clean up loading state
       setModulesBeingAdded(prev => {
         const newSet = new Set(prev);
         newSet.delete(moduleName);
@@ -148,9 +160,52 @@ export default function ProjectSettings() {
   };
 
   const handleRemoveModule = async (moduleId: string) => {
-    const module = project?.modules.find(m => m.id === moduleId);
-    if (module) {
-      setShowModuleDeleteConfirm({ id: moduleId, name: module.name });
+    if (!project) return;
+    
+    const module = project.modules.find(m => m.id === moduleId);
+    if (!module) return;
+    
+    // Afficher la modale de confirmation
+    setShowModuleDeleteConfirm({ id: moduleId, name: module.name });
+  };
+
+  const handleConfirmDeleteModule = async () => {
+    if (!showModuleDeleteConfirm || !project) return;
+    
+    const moduleId = showModuleDeleteConfirm.id;
+    const moduleName = showModuleDeleteConfirm.name;
+    
+    try {
+      setModulesBeingDeleted(prev => new Set([...prev, moduleId]));
+      
+      // Remove module from Plane.so and update local storage
+      await removeModuleFromProject(project.id, moduleId);
+      
+      // Refresh project data from local storage after successful deletion
+      // Get fresh data from the store after the update
+      const { data: freshLocalData } = useLocalDataStore.getState();
+      const updatedProject = freshLocalData.projects.find(p => p.id === project.id);
+      if (updatedProject) {
+        setProject(updatedProject);
+        setRefreshKey(prev => prev + 1); // Force re-render
+        console.log('🔄 Project state updated after module deletion');
+        console.log('📋 Updated project modules:', updatedProject.modules.map(m => m.name));
+      }
+      
+      showToast(`Module "${moduleName}" supprimé avec succès !`);
+      
+      // Fermer la modale
+      setShowModuleDeleteConfirm(null);
+      setDeleteConfirmText('');
+    } catch (error) {
+      console.error('❌ Error removing module:', error);
+      showToast(`Erreur lors de la suppression du module "${moduleName}"`, 'error');
+    } finally {
+      setModulesBeingDeleted(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(moduleId);
+        return newSet;
+      });
     }
   };
 
@@ -170,13 +225,19 @@ export default function ProjectSettings() {
         subTasks: []
       };
 
-      await updateModuleInProject(project.id, moduleId, {
-        tasks: [...project.modules.find(m => m.id === moduleId)!.tasks, newTask]
-      });
+      // Update local project state
+      const updatedProject = {
+        ...project,
+        modules: project.modules.map(m => 
+          m.id === moduleId 
+            ? { ...m, tasks: [...m.tasks, newTask] }
+            : m
+        )
+      };
+      setProject(updatedProject);
 
       setNewTaskNames(prev => ({ ...prev, [moduleId]: '' }));
     } catch (error) {
-      setError('Erreur lors de l\'ajout de la tâche');
       console.error('Error adding task:', error);
     }
   };
@@ -188,11 +249,17 @@ export default function ProjectSettings() {
       const module = project.modules.find(m => m.id === moduleId);
       if (!module) return;
 
-      await updateModuleInProject(project.id, moduleId, {
-        tasks: module.tasks.filter(t => t.id !== taskId)
-      });
+      // Update local project state
+      const updatedProject = {
+        ...project,
+        modules: project.modules.map(m => 
+          m.id === moduleId 
+            ? { ...m, tasks: m.tasks.filter(t => t.id !== taskId) }
+            : m
+        )
+      };
+      setProject(updatedProject);
     } catch (error) {
-      setError('Erreur lors de la suppression de la tâche');
       console.error('Error removing task:', error);
     }
   };
@@ -201,9 +268,17 @@ export default function ProjectSettings() {
     if (!project) return;
 
     try {
-      await updateModuleInProject(project.id, moduleId, updates);
+      // Update local project state
+      const updatedProject = {
+        ...project,
+        modules: project.modules.map(m => 
+          m.id === moduleId 
+            ? { ...m, ...updates }
+            : m
+        )
+      };
+      setProject(updatedProject);
     } catch (error) {
-      setError('Erreur lors de la mise à jour du module');
       console.error('Error updating module:', error);
     }
   };
@@ -212,9 +287,24 @@ export default function ProjectSettings() {
     if (!project) return;
     setLoading(true);
     try {
-      await addSubTaskToTask(project.id, moduleId, taskId, subTask);
+      // Update local project state
+      const updatedProject = {
+        ...project,
+        modules: project.modules.map(m => 
+          m.id === moduleId 
+            ? {
+                ...m,
+                tasks: m.tasks.map(t => 
+                  t.id === taskId 
+                    ? { ...t, subTasks: [...t.subTasks, subTask] }
+                    : t
+                )
+              }
+            : m
+        )
+      };
+      setProject(updatedProject);
     } catch (error) {
-      setError('Erreur lors de l\'ajout de la sous-tâche');
       console.error('Error adding sub-task:', error);
     } finally {
       setLoading(false);
@@ -225,9 +315,31 @@ export default function ProjectSettings() {
     if (!project) return;
     setLoading(true);
     try {
-      await updateSubTaskInTask(project.id, moduleId, taskId, subTaskId, updates);
+      // Update local project state
+      const updatedProject = {
+        ...project,
+        modules: project.modules.map(m => 
+          m.id === moduleId 
+            ? {
+                ...m,
+                tasks: m.tasks.map(t => 
+                  t.id === taskId 
+                    ? {
+                        ...t,
+                        subTasks: t.subTasks.map(st => 
+                          st.id === subTaskId 
+                            ? { ...st, ...updates }
+                            : st
+                        )
+                      }
+                    : t
+                )
+              }
+            : m
+        )
+      };
+      setProject(updatedProject);
     } catch (error) {
-      setError('Erreur lors de la mise à jour de la sous-tâche');
       console.error('Error updating sub-task:', error);
     } finally {
       setLoading(false);
@@ -238,9 +350,27 @@ export default function ProjectSettings() {
     if (!project) return;
     setLoading(true);
     try {
-      await removeSubTaskFromTask(project.id, moduleId, taskId, subTaskId);
+      // Update local project state
+      const updatedProject = {
+        ...project,
+        modules: project.modules.map(m => 
+          m.id === moduleId 
+            ? {
+                ...m,
+                tasks: m.tasks.map(t => 
+                  t.id === taskId 
+                    ? {
+                        ...t,
+                        subTasks: t.subTasks.filter(st => st.id !== subTaskId)
+                      }
+                    : t
+                )
+              }
+            : m
+        )
+      };
+      setProject(updatedProject);
     } catch (error) {
-      setError('Erreur lors de la suppression de la sous-tâche');
       console.error('Error deleting sub-task:', error);
     } finally {
       setLoading(false);
@@ -248,10 +378,24 @@ export default function ProjectSettings() {
   };
 
   const confirmDeleteModule = async () => {
-    if (!project || !showModuleDeleteConfirm || deleteConfirmText !== 'DELETE') return;
+    console.log('🗑️ confirmDeleteModule called');
+    console.log('📋 Project:', project?.name);
+    console.log('📋 showModuleDeleteConfirm:', showModuleDeleteConfirm);
+    console.log('📋 deleteConfirmText:', deleteConfirmText);
+    
+    if (!project || !showModuleDeleteConfirm || deleteConfirmText !== 'DELETE') {
+      console.log('❌ Validation failed:', { 
+        hasProject: !!project, 
+        hasConfirm: !!showModuleDeleteConfirm, 
+        textMatch: deleteConfirmText === 'DELETE' 
+      });
+      return;
+    }
 
     const moduleToDelete = showModuleDeleteConfirm;
     const moduleName = moduleToDelete.name;
+    
+    console.log('✅ Starting module deletion for:', moduleName);
 
     try {
       // Mark module as being deleted
@@ -267,7 +411,7 @@ export default function ProjectSettings() {
       setDeleteConfirmText('');
 
       // Show success message immediately
-      showToast(`Module "${moduleName}" supprimé avec succès !`, 'error');
+      showToast(`Module "${moduleName}" supprimé avec succès !`, 'success');
 
       // Remove module from project with optimistic update and error handling
       try {
@@ -308,9 +452,11 @@ export default function ProjectSettings() {
         showToast(`Erreur lors de la suppression du module "${moduleName}"`, 'error');
       }
       
+      console.log('✅ Module deletion completed successfully');
+      
     } catch (error) {
-      setError('Erreur lors de la suppression du module');
-      console.error('Error removing module:', error);
+      console.error('❌ Error in confirmDeleteModule:', error);
+      // Error handled in console
       
       // Remove from being deleted state on error
       setModulesBeingDeleted(prev => {
@@ -322,17 +468,19 @@ export default function ProjectSettings() {
   };
 
   const handleDeleteProject = () => {
-    setShowDeleteConfirm(true);
+    if (!project) return;
+    setShowProjectDeleteConfirm({ id: project.id, name: project.name });
   };
 
   const confirmDeleteProject = async () => {
-    if (!project) return;
+    if (!showProjectDeleteConfirm || !project) return;
 
     try {
       setLoading(true);
       
       // Close modal immediately for better UX
-      setShowDeleteConfirm(false);
+      setShowProjectDeleteConfirm(null);
+      setProjectDeleteConfirmText('');
       
       // Show success message immediately (optimistic)
       showToast('Projet supprimé avec succès !', 'success');
@@ -358,7 +506,7 @@ export default function ProjectSettings() {
         }
       }
       
-      setError(errorMessage);
+      // Error handled in console
       console.error('Error deleting project:', error);
       
       // Show error toast
@@ -377,14 +525,14 @@ export default function ProjectSettings() {
     
     try {
       setIsManualSyncing(true);
-      await refreshProject(project.id);
+      // Manual sync - reload data from store
       // Update local project state after sync
-      const updatedProject = projects.find(p => p.id === project.id);
+      const updatedProject = localData.projects.find(p => p.id === project.id);
       if (updatedProject) {
         setProject(updatedProject);
       }
     } catch (error) {
-      setError('Erreur lors de la synchronisation');
+      // Error handled in console
       console.error('Error during manual sync:', error);
     } finally {
       setIsManualSyncing(false);
@@ -393,7 +541,7 @@ export default function ProjectSettings() {
 
   const getModuleInfo = (moduleName: string) => {
     // Utiliser les templates dynamiques au lieu du tableau statique
-    const template = templates.find(t => t.name === moduleName);
+    const template = localData.moduleTemplates.find(t => t.name === moduleName);
     if (template) {
       return {
         type: template.name as ModuleType,
@@ -405,7 +553,7 @@ export default function ProjectSettings() {
     }
     
     // Fallback vers le premier template si pas trouvé
-    const firstTemplate = templates[0];
+    const firstTemplate = localData.moduleTemplates[0];
     return {
       type: firstTemplate?.name as ModuleType || 'Infrastructure',
       name: firstTemplate?.name || 'Infrastructure',
@@ -433,7 +581,7 @@ export default function ProjectSettings() {
   if (!project) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-monday-500"></div>
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
       </div>
     );
   }
@@ -558,52 +706,66 @@ export default function ProjectSettings() {
           </h2>
         </div>
 
-        {project.modules.length === 0 ? (
-          <div className="text-center py-12 bg-gray-50 dark:bg-gray-800 rounded-lg">
-            <ExclamationTriangleIcon className="mx-auto h-12 w-12 text-gray-400" />
-            <h3 className="mt-2 text-sm font-medium text-gray-900 dark:text-white">
-              Aucun module
-            </h3>
-            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-              Ajoutez des modules à votre projet.
-            </p>
-          </div>
-        ) : (
-          <TeamModulesManager
-            project={project}
-            onAddTask={handleAddTask}
-            onRemoveTask={handleRemoveTask}
-            onRemoveModule={handleRemoveModule}
-            onUpdateModule={handleUpdateModule}
-            onAddModule={handleAddModule}
-            onAddSubTask={handleAddSubTask}
-            onUpdateSubTask={handleUpdateSubTask}
-            onDeleteSubTask={handleDeleteSubTask}
-            newTaskNames={newTaskNames}
-            setNewTaskNames={setNewTaskNames}
-            setShowDeleteConfirm={setShowModuleDeleteConfirm}
-            loading={loading}
-            modulesBeingAdded={modulesBeingAdded}
-            modulesBeingDeleted={modulesBeingDeleted}
-          />
-        )}
+        <TeamModulesManager
+          key={refreshKey}
+          project={project}
+          onAddTask={handleAddTask}
+          onRemoveTask={handleRemoveTask}
+          onRemoveModule={handleRemoveModule}
+          onUpdateModule={handleUpdateModule}
+          onAddModule={handleAddModule}
+          onAddSubTask={handleAddSubTask}
+          onUpdateSubTask={handleUpdateSubTask}
+          onDeleteSubTask={handleDeleteSubTask}
+          newTaskNames={newTaskNames}
+          setNewTaskNames={setNewTaskNames}
+          setShowDeleteConfirm={setShowModuleDeleteConfirm}
+          loading={loading}
+          modulesBeingAdded={modulesBeingAdded}
+          modulesBeingDeleted={modulesBeingDeleted}
+        />
       </div>
 
 
-      {/* Delete Confirmation Modal */}
-      {showModuleDeleteConfirm && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+
+      {/* Project Delete Confirmation Modal */}
+      {showProjectDeleteConfirm && (
+        <div 
+          style={{ 
+            position: 'fixed', 
+            top: 0, 
+            left: 0, 
+            right: 0, 
+            bottom: 0, 
+            backgroundColor: 'rgba(0,0,0,0.8)', 
+            zIndex: 999999,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '20px'
+          }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setShowProjectDeleteConfirm(null);
+              setProjectDeleteConfirmText('');
+            }
+          }}
+        >
           <motion.div
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
             className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md mx-4 w-full"
+            onClick={(e) => e.stopPropagation()}
           >
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-              Supprimer le module
+              Confirmer la suppression du projet
             </h3>
             <p className="text-gray-600 dark:text-gray-400 mb-4">
-              Êtes-vous sûr de vouloir supprimer le module <strong>{showModuleDeleteConfirm?.name}</strong> ?
-              Cette action supprimera également toutes les tâches associées.
+              Êtes-vous sûr de vouloir supprimer le projet <strong>{showProjectDeleteConfirm.name}</strong> ?
+              Cette action supprimera définitivement le projet et toutes ses données.
+            </p>
+            <p className="text-sm text-red-600 dark:text-red-400 mb-4">
+              ⚠️ Cette action est irréversible et supprimera tous les modules, tâches et sous-tâches associés.
             </p>
             <div className="mb-4">
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
@@ -611,8 +773,8 @@ export default function ProjectSettings() {
               </label>
               <input
                 type="text"
-                value={deleteConfirmText}
-                onChange={(e) => setDeleteConfirmText(e.target.value)}
+                value={projectDeleteConfirmText}
+                onChange={(e) => setProjectDeleteConfirmText(e.target.value)}
                 className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-red-500 focus:border-transparent"
                 placeholder="DELETE"
               />
@@ -620,69 +782,19 @@ export default function ProjectSettings() {
             <div className="flex justify-end space-x-3">
               <button
                 onClick={() => {
-                  setShowModuleDeleteConfirm(null);
-                  setDeleteConfirmText('');
+                  setShowProjectDeleteConfirm(null);
+                  setProjectDeleteConfirmText('');
                 }}
-                className="btn-secondary"
-              >
-                Annuler
-              </button>
-              <button
-                onClick={confirmDeleteModule}
-                disabled={deleteConfirmText !== 'DELETE'}
-                className="btn-danger disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Supprimer
-              </button>
-            </div>
-          </motion.div>
-        </div>
-      )}
-
-      {/* Delete Confirmation Modal */}
-      {showDeleteConfirm && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md w-full mx-4"
-          >
-            <div className="flex items-center space-x-3 mb-4">
-              <div className="flex-shrink-0">
-                <ExclamationTriangleIcon className="h-6 w-6 text-red-600" />
-              </div>
-              <div>
-                <h3 className="text-lg font-medium text-gray-900 dark:text-white">
-                  Supprimer le projet
-                </h3>
-                <p className="text-sm text-gray-500 dark:text-gray-400">
-                  Cette action est irréversible
-                </p>
-              </div>
-            </div>
-            
-            <div className="mb-6">
-              <p className="text-sm text-gray-600 dark:text-gray-400">
-                Le projet <strong>{project?.name}</strong> sera supprimé définitivement de Plane.so et de cette application.
-              </p>
-              <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">
-                Toutes les données associées (modules, tâches, sous-tâches) seront également supprimées.
-              </p>
-            </div>
-
-            <div className="flex justify-end space-x-3">
-              <button
-                onClick={() => setShowDeleteConfirm(false)}
-                className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+                className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 rounded-lg transition-colors"
               >
                 Annuler
               </button>
               <button
                 onClick={confirmDeleteProject}
-                disabled={loading}
-                className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg disabled:opacity-50 transition-colors"
+                disabled={projectDeleteConfirmText !== 'DELETE' || loading}
+                className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
-                {loading ? 'Suppression...' : 'Supprimer'}
+                {loading ? 'Suppression...' : 'Supprimer le projet'}
               </button>
             </div>
           </motion.div>
@@ -751,7 +863,7 @@ export default function ProjectSettings() {
                 Annuler
               </button>
               <button
-                onClick={confirmDeleteModule}
+                onClick={handleConfirmDeleteModule}
                 disabled={deleteConfirmText !== 'DELETE'}
                 className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
@@ -759,6 +871,13 @@ export default function ProjectSettings() {
               </button>
             </div>
           </motion.div>
+        </div>
+      )}
+
+      {/* API Tester - Only show if project has a planeProjectId */}
+      {project?.planeProjectId && (
+        <div className="mt-8">
+          <PlaneApiTester projectId={project.planeProjectId} />
         </div>
       )}
 

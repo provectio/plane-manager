@@ -2,7 +2,7 @@ import { motion } from 'framer-motion';
 import { ChevronDownIcon, ChevronRightIcon } from '@heroicons/react/24/outline';
 import { useState } from 'react';
 import { Team } from '../types';
-import { ModuleTemplate } from '../store/useModuleTemplatesStore';
+import { LocalModuleTemplate as ModuleTemplate } from '../store/useLocalDataStore';
 
 interface TeamCardProps {
   team: Team;

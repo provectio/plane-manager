@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   DndContext,
@@ -32,8 +33,8 @@ import {
   Squares2X2Icon,
   Bars3Icon
 } from '@heroicons/react/24/outline';
-import { useModuleTemplatesStore, ModuleTemplate } from '../store/useModuleTemplatesStore';
-import { useTeamsStore } from '../store/useTeamsStore';
+import { useLocalDataStore } from '../store/useLocalDataStore';
+import { LocalModuleTemplate as ModuleTemplate } from '../store/useLocalDataStore';
 import { TeamType, SubTask } from '../types';
 import SubTaskModal from '../components/SubTaskModal';
 
@@ -130,23 +131,44 @@ function SortableTaskItem({
 }
 
 export default function ModuleTemplates() {
-  const { templates, addTemplate, updateTemplate, deleteTemplate, addSubTaskToTemplate, updateSubTaskInTemplate, removeSubTaskFromTemplate, reorderSubTasksInTemplate, ensureDefaultTemplates } = useModuleTemplatesStore();
-  const { teams } = useTeamsStore();
+  const [searchParams] = useSearchParams();
+  const { data: localData, addModuleTemplate, updateModuleTemplate, deleteModuleTemplate, addSubTaskToTemplate, updateSubTaskInTemplate, removeSubTaskFromTemplate, reorderSubTasksInTemplate } = useLocalDataStore();
+  
+  // Alias pour la compatibilité
+  const templates = localData.moduleTemplates;
+  const teams = localData.teams;
   const [showAddTemplate, setShowAddTemplate] = useState(false);
   const [showEditTemplate, setShowEditTemplate] = useState<ModuleTemplate | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<ModuleTemplate | null>(null);
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
   const [newTaskNames, setNewTaskNames] = useState<Record<string, string>>({});
+  
+  // Get team from URL params for pre-selection
+  const teamFromUrl = searchParams.get('team') as TeamType | null;
+  const defaultTeam = teamFromUrl && teams.find(t => t.name === teamFromUrl) ? teamFromUrl : (teams.length > 0 ? teams[0].name : 'Infrastructure');
+  
   const [newTemplateData, setNewTemplateData] = useState({
     name: '',
     description: '',
-    icon: '🏗️',
-    team: 'Infrastructure' as TeamType,
-            tasks: [{ name: '', subTasks: [] }]
+    team: defaultTeam as TeamType,
+    tasks: [{ name: '', subTasks: [] }]
   });
+
+  // Update team when URL changes
+  useEffect(() => {
+    if (teamFromUrl && teams.find(t => t.name === teamFromUrl)) {
+      setNewTemplateData(prev => ({ ...prev, team: teamFromUrl }));
+    }
+  }, [teamFromUrl, teams]);
   const [nameError, setNameError] = useState('');
   const [selectedTeam, setSelectedTeam] = useState<TeamType | null>(null);
+  
+  // Determine if we're on a specific team page (either from URL or selectedTeam)
+  const currentTeam = teamFromUrl || selectedTeam;
+  const isTeamSpecific = !!currentTeam;
+  
   const [activeTab, setActiveTab] = useState<'settings' | 'tasks'>('settings');
+  const [newTemplateActiveTab, setNewTemplateActiveTab] = useState<'settings' | 'tasks'>('settings');
   const [showSubTaskModal, setShowSubTaskModal] = useState<{ templateId: string; taskIndex: number; taskName: string } | null>(null);
 
   // Capteurs pour le drag & drop
@@ -159,15 +181,15 @@ export default function ModuleTemplates() {
 
   // S'assurer que tous les templates par défaut sont présents
   useEffect(() => {
-    ensureDefaultTemplates();
+    // Désactivé - l'utilisateur doit créer ses propres templates
+    // ensureDefaultTemplates();
     console.log('Templates loaded:', templates);
     console.log('Teams loaded:', teams);
-  }, [ensureDefaultTemplates, templates, teams]);
+  }, [templates, teams]);
 
   const handleAddTemplate = (templateData: {
     name: string;
     description: string;
-    icon: string;
     team: TeamType;
     tasks: { name: string }[];
   }) => {
@@ -181,14 +203,22 @@ export default function ModuleTemplates() {
       return;
     }
 
-    addTemplate(templateData);
+    // Get team icon for the template
+    const teamIcon = teams.find(t => t.name === templateData.team)?.icon || '🏗️';
+    
+    addModuleTemplate({
+      ...templateData,
+      icon: teamIcon
+    });
     setShowAddTemplate(false);
+    
+    // Remettre l'équipe actuellement sélectionnée
+    const currentTeam = teamFromUrl || selectedTeam || defaultTeam;
     setNewTemplateData({
       name: '',
       description: '',
-      icon: '🏗️',
-      team: 'Infrastructure' as TeamType,
-            tasks: [{ name: '', subTasks: [] }]
+      team: currentTeam as TeamType,
+      tasks: [{ name: '', subTasks: [] }]
     });
     setNameError('');
   };
@@ -196,7 +226,6 @@ export default function ModuleTemplates() {
   const handleEditTemplate = (templateData: {
     name: string;
     description: string;
-    icon: string;
     team: TeamType;
     tasks: { name: string }[];
   }) => {
@@ -213,16 +242,20 @@ export default function ModuleTemplates() {
       return;
     }
 
-    // Créer le template avec les sous-tâches préservées
+    // Get team icon for the template
+    const teamIcon = teams.find(t => t.name === templateData.team)?.icon || '🏗️';
+
+    // Créer le template avec les sous-tâches préservées et l'icône de l'équipe
     const templateWithSubTasks = {
       ...templateData,
+      icon: teamIcon,
       tasks: showEditTemplate.tasks.map(task => ({
         name: task.name,
         subTasks: task.subTasks || []
       }))
     };
 
-    updateTemplate(showEditTemplate.id, templateWithSubTasks);
+    updateModuleTemplate(showEditTemplate.id, templateWithSubTasks);
     setShowEditTemplate(null);
     setNameError('');
   };
@@ -230,7 +263,7 @@ export default function ModuleTemplates() {
   const handleDeleteTemplate = () => {
     if (!showDeleteConfirm || deleteConfirmText !== 'DELETE') return;
     
-    deleteTemplate(showDeleteConfirm.id);
+    deleteModuleTemplate(showDeleteConfirm.id);
     setShowDeleteConfirm(null);
     setDeleteConfirmText('');
   };
@@ -244,12 +277,13 @@ export default function ModuleTemplates() {
   };
 
   const handleOpenAddTemplate = () => {
+    // Utiliser l'équipe actuellement sélectionnée ou celle de l'URL
+    const currentTeam = teamFromUrl || selectedTeam || defaultTeam;
     setNewTemplateData({
       name: '',
       description: '',
-      icon: '🏗️',
-      team: 'Infrastructure' as TeamType,
-            tasks: [{ name: '', subTasks: [] }]
+      team: currentTeam as TeamType,
+      tasks: [{ name: '', subTasks: [] }]
     });
     setShowAddTemplate(true);
     setNameError('');
@@ -307,7 +341,7 @@ export default function ModuleTemplates() {
 
     if (oldIndex !== -1 && newIndex !== -1) {
       const newTasks = arrayMove(template.tasks, oldIndex, newIndex);
-      updateTemplate(templateId, { tasks: newTasks });
+      updateModuleTemplate(templateId, { tasks: newTasks });
     }
   };
 
@@ -381,15 +415,22 @@ export default function ModuleTemplates() {
                 <div
                   key={team.id}
                   onClick={() => handleTeamClick(team.name)}
-                  className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 text-center cursor-pointer hover:shadow-lg transition-shadow"
+                  className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 text-center cursor-pointer hover:shadow-lg transition-shadow flex flex-col h-full"
                 >
                   <div className="text-2xl mb-2">{team.icon}</div>
                   <h3 className="font-medium text-sm text-gray-900 dark:text-white mb-1">
                     {team.name}
                   </h3>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">
-                    {teamTemplates.length} module(s)
-                  </p>
+                  <div className="mb-1">
+                    <span className="px-1.5 py-0.5 bg-gray-100 dark:bg-gray-700 rounded text-xs font-mono text-gray-600 dark:text-gray-400">
+                      {team.trigramme}
+                    </span>
+                  </div>
+                  <div className="mt-auto">
+                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                      {teamTemplates.length} module(s)
+                    </p>
+                  </div>
                 </div>
               );
             })}
@@ -401,9 +442,14 @@ export default function ModuleTemplates() {
                 {teams.find(t => t.name === selectedTeam)?.icon}
               </span>
               <div>
-                <h3 className="font-semibold text-blue-900 dark:text-blue-100">
-                  {selectedTeam}
-                </h3>
+                <div className="flex items-center space-x-2">
+                  <h3 className="font-semibold text-blue-900 dark:text-blue-100">
+                    {selectedTeam}
+                  </h3>
+                  <span className="px-1.5 py-0.5 bg-blue-100 dark:bg-blue-800 rounded text-xs font-mono text-blue-700 dark:text-blue-300">
+                    {teams.find(t => t.name === selectedTeam)?.trigramme}
+                  </span>
+                </div>
                 <p className="text-sm text-blue-700 dark:text-blue-300">
                   {filteredTemplates.length} module(s) disponible(s)
                 </p>
@@ -425,10 +471,20 @@ export default function ModuleTemplates() {
               className="bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 overflow-hidden"
               >
                 <div className="p-6 h-full flex flex-col justify-between">
-                  <div className="flex items-start justify-between mb-4">
-                  <div className="flex items-center space-x-3">
-                    <span className="text-2xl">{template.icon}</span>
-                    <div>
+                  <div className="mb-4">
+                    {/* Tag d'équipe en haut à gauche */}
+                    <div className="mb-3">
+                      <span 
+                        className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium text-white bg-blue-500"
+                      >
+                        {template.team}
+                      </span>
+                    </div>
+                    
+                    {/* Contenu principal */}
+                    <div className="flex items-start space-x-3">
+                      <span className="text-2xl">{template.icon}</span>
+                      <div className="flex-1">
                         <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
                           {template.name}
                         </h3>
@@ -437,15 +493,8 @@ export default function ModuleTemplates() {
                         </p>
                       </div>
                     </div>
-                    <div className="flex items-center space-x-2">
-                      <span 
-                        className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium text-white bg-blue-500"
-                      >
-                        {template.team}
-                      </span>
-                    </div>
                   </div>
-
+                  
                   <div className="flex items-center justify-between">
                     <div className="flex items-center space-x-2 text-sm text-gray-600 dark:text-gray-400">
                       <ListBulletIcon className="w-4 h-4" />
@@ -495,138 +544,174 @@ export default function ModuleTemplates() {
       </div>
       )}
 
-      {/* Add Template Modal */}
+      {/* Add Template Modal with Tabs */}
       {showAddTemplate && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <motion.div
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-2xl mx-4 w-full max-h-[80vh] overflow-y-auto"
+            className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-4xl mx-4 w-full max-h-[80vh] overflow-y-auto"
           >
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-              Nouveau modèle
-            </h3>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                Nouveau modèle
+              </h3>
+              {isTeamSpecific && currentTeam && (
+                <div className="flex items-center space-x-2 px-3 py-1.5 bg-blue-50 dark:bg-blue-900/20 rounded-full border border-blue-200 dark:border-blue-800">
+                  <span className="text-lg">
+                    {teams.find(t => t.name === currentTeam)?.icon || '🏗️'}
+                  </span>
+                  <span className="text-sm font-medium text-blue-900 dark:text-blue-100">
+                    {currentTeam}
+                  </span>
+                </div>
+              )}
+            </div>
             
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Nom du modèle *
-                </label>
-                <input
-                  type="text"
-                  value={newTemplateData.name}
-                  onChange={(e) => setNewTemplateData({ ...newTemplateData, name: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-monday-500 focus:border-transparent"
-                  placeholder="Ex: Infrastructure Cloud"
-                />
-                {nameError && (
-                  <p className="text-red-500 text-sm mt-1">{nameError}</p>
-                )}
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Description
-                </label>
-                <textarea
-                  value={newTemplateData.description}
-                  onChange={(e) => setNewTemplateData({ ...newTemplateData, description: e.target.value })}
-                  rows={3}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-monday-500 focus:border-transparent"
-                  placeholder="Décrivez le modèle..."
-                />
-              </div>
+            {/* Tabs */}
+            <div className="flex space-x-1 mb-6 border-b border-gray-200 dark:border-gray-700">
+              <button
+                onClick={() => setNewTemplateActiveTab('settings')}
+                className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+                  newTemplateActiveTab === 'settings'
+                    ? 'border-blue-500 text-blue-600 dark:text-blue-400'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'
+                }`}
+              >
+                <div className="flex items-center space-x-2">
+                  <CogIcon className="w-4 h-4" />
+                  <span>Paramètres du module</span>
+                </div>
+              </button>
+              <button
+                onClick={() => setNewTemplateActiveTab('tasks')}
+                className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+                  newTemplateActiveTab === 'tasks'
+                    ? 'border-blue-500 text-blue-600 dark:text-blue-400'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'
+                }`}
+              >
+                <div className="flex items-center space-x-2">
+                  <ListBulletIcon className="w-4 h-4" />
+                  <span>Tâches</span>
+                </div>
+              </button>
+            </div>
 
+            {/* Tab Content */}
+            {newTemplateActiveTab === 'settings' && (
+              <div className="space-y-4">
                 <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Équipe *
-                </label>
-                <select
-                  value={newTemplateData.team}
-                  onChange={(e) => setNewTemplateData({ ...newTemplateData, team: e.target.value as TeamType })}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-monday-500 focus:border-transparent"
-                >
-                  {teams.map((team) => (
-                    <option key={team.id} value={team.name}>
-                      {team.name}
-                    </option>
-                  ))}
-                </select>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Nom du modèle *
+                  </label>
+                  <input
+                    type="text"
+                    value={newTemplateData.name}
+                    onChange={(e) => setNewTemplateData({ ...newTemplateData, name: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="Ex: Infrastructure Cloud"
+                  />
+                  {nameError && (
+                    <p className="text-red-500 text-sm mt-1">{nameError}</p>
+                  )}
                 </div>
                 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Icône
+                    Description
                   </label>
-                  <input
-                    type="text"
-                  value={newTemplateData.icon}
-                  onChange={(e) => setNewTemplateData({ ...newTemplateData, icon: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-monday-500 focus:border-transparent"
-                    placeholder="🏗️"
+                  <textarea
+                    value={newTemplateData.description}
+                    onChange={(e) => setNewTemplateData({ ...newTemplateData, description: e.target.value })}
+                    rows={3}
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="Décrivez le modèle..."
                   />
+                </div>
+
+                {!isTeamSpecific && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                      Équipe *
+                    </label>
+                    <select
+                      value={newTemplateData.team}
+                      onChange={(e) => setNewTemplateData({ ...newTemplateData, team: e.target.value as TeamType })}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    >
+                      {teams.map((team) => (
+                        <option key={team.id} value={team.name}>
+                          {team.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
               </div>
+            )}
 
-
-              {/* Tâches par défaut */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Tâches par défaut
-                </label>
-                <div className="space-y-2">
-                  {newTemplateData.tasks.map((task, index) => (
-                    <div key={index} className="flex items-center space-x-2">
-                      <input
-                        type="text"
-                        value={task.name}
-                        onChange={(e) => updateTask(newTemplateData, setNewTemplateData, index, e.target.value)}
-                        className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-monday-500 focus:border-transparent"
-                        placeholder={`Tâche ${index + 1}`}
-                      />
-                      <div className="flex items-center space-x-1">
-                        <button
-                          type="button"
-                          onClick={() => setShowSubTaskModal({ 
-                            templateId: 'new_template', 
-                            taskIndex: index, 
-                            taskName: task.name 
-                          })}
-                          className="relative p-2 text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
-                          title="Gérer les sous-tâches"
-                        >
-                          {/* Badge pour le nombre de sous-tâches */}
-                          <div className={`absolute -top-1 -right-1 w-4 h-4 rounded-full text-xs flex items-center justify-center font-bold ${
-                            (task.subTasks?.length || 0) > 0 
-                              ? 'bg-green-500 text-white' 
-                              : 'bg-gray-400 text-white'
-                          }`}>
-                            {task.subTasks?.length || 0}
-                          </div>
-                          <Squares2X2Icon className="w-4 h-4" />
-                        </button>
-                        {newTemplateData.tasks.length > 1 && (
+            {newTemplateActiveTab === 'tasks' && (
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Tâches par défaut
+                  </label>
+                  <div className="space-y-2">
+                    {newTemplateData.tasks.map((task, index) => (
+                      <div key={index} className="flex items-center space-x-2">
+                        <input
+                          type="text"
+                          value={task.name}
+                          onChange={(e) => updateTask(newTemplateData, setNewTemplateData, index, e.target.value)}
+                          className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          placeholder={`Tâche ${index + 1}`}
+                        />
+                        <div className="flex items-center space-x-1">
                           <button
                             type="button"
-                            onClick={() => removeTask(newTemplateData, setNewTemplateData, index)}
-                            className="p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                            onClick={() => setShowSubTaskModal({ 
+                              templateId: 'new_template', 
+                              taskIndex: index, 
+                              taskName: task.name 
+                            })}
+                            className="relative p-2 text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
+                            title="Gérer les sous-tâches"
                           >
-                            <TrashIcon className="w-4 h-4" />
+                            {/* Badge pour le nombre de sous-tâches */}
+                            <div className={`absolute -top-1 -right-1 w-4 h-4 rounded-full text-xs flex items-center justify-center font-bold ${
+                              (task.subTasks?.length || 0) > 0 
+                                ? 'bg-green-500 text-white' 
+                                : 'bg-gray-400 text-white'
+                            }`}>
+                              {task.subTasks?.length || 0}
+                            </div>
+                            <Squares2X2Icon className="w-4 h-4" />
                           </button>
-                        )}
+                          {newTemplateData.tasks.length > 1 && (
+                            <button
+                              type="button"
+                              onClick={() => removeTask(newTemplateData, setNewTemplateData, index)}
+                              className="p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                            >
+                              <TrashIcon className="w-4 h-4" />
+                            </button>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  ))}
-                  <button
-                    type="button"
-                    onClick={() => addTask(newTemplateData, setNewTemplateData)}
-                    className="flex items-center space-x-2 text-monday-500 hover:text-monday-600 text-sm"
-                  >
-                    <PlusIcon className="w-4 h-4" />
-                    <span>Ajouter une tâche</span>
-                  </button>
+                    ))}
+                    <button
+                      type="button"
+                      onClick={() => addTask(newTemplateData, setNewTemplateData)}
+                      className="flex items-center space-x-2 text-blue-500 hover:text-blue-600 text-sm"
+                    >
+                      <PlusIcon className="w-4 h-4" />
+                      <span>Ajouter une tâche</span>
+                    </button>
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
 
             <div className="flex justify-end space-x-3 mt-6">
               <button
@@ -636,7 +721,12 @@ export default function ModuleTemplates() {
                 Annuler
               </button>
               <button
-                onClick={() => handleAddTemplate(newTemplateData)}
+                onClick={() => handleAddTemplate({
+                  name: newTemplateData.name,
+                  description: newTemplateData.description,
+                  team: newTemplateData.team,
+                  tasks: newTemplateData.tasks
+                })}
                 disabled={!newTemplateData.name.trim()}
                 className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
               >
@@ -655,9 +745,21 @@ export default function ModuleTemplates() {
             animate={{ opacity: 1, scale: 1 }}
             className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-4xl mx-4 w-full max-h-[80vh] overflow-y-auto"
           >
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-              Modifier le modèle
-            </h3>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                Modifier le modèle
+              </h3>
+              {showEditTemplate && (
+                <div className="flex items-center space-x-2 px-3 py-1.5 bg-blue-50 dark:bg-blue-900/20 rounded-full border border-blue-200 dark:border-blue-800">
+                  <span className="text-lg">
+                    {teams.find(t => t.name === showEditTemplate.team)?.icon || '🏗️'}
+                  </span>
+                  <span className="text-sm font-medium text-blue-900 dark:text-blue-100">
+                    {showEditTemplate.team}
+                  </span>
+                </div>
+              )}
+            </div>
             
             {/* Tabs */}
             <div className="flex space-x-1 mb-6 border-b border-gray-200 dark:border-gray-700">
@@ -736,17 +838,6 @@ export default function ModuleTemplates() {
                   />
                 </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Icône
-                  </label>
-                  <input
-                    type="text"
-                    value={showEditTemplate.icon}
-                    onChange={(e) => setShowEditTemplate({ ...showEditTemplate, icon: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-monday-500 focus:border-transparent"
-                />
-              </div>
               
               </div>
             )}
@@ -802,7 +893,12 @@ export default function ModuleTemplates() {
                 Annuler
               </button>
               <button
-                onClick={() => handleEditTemplate(showEditTemplate)}
+                onClick={() => handleEditTemplate({
+                  name: showEditTemplate.name,
+                  description: showEditTemplate.description,
+                  team: showEditTemplate.team,
+                  tasks: showEditTemplate.tasks
+                })}
                 disabled={!showEditTemplate.name.trim()}
                 className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
               >

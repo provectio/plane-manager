@@ -2,7 +2,9 @@ version: '3.8'
 
 services:
   plane-manager:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile
     container_name: plane-manager-app
     restart: unless-stopped
     ports:
@@ -10,6 +12,10 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=3001
+      # Variables d'environnement pour Plane.so (à configurer)
+      - VITE_PLANE_API_ENDPOINT=${VITE_PLANE_API_ENDPOINT}
+      - VITE_PLANE_API_KEY=${VITE_PLANE_API_KEY}
+      - VITE_PLANE_WORKSPACE_SLUG_FRONTEND=${VITE_PLANE_WORKSPACE_SLUG_FRONTEND}
     volumes:
       # Volume persistant pour les données JSON
       - plane_data:/app/data

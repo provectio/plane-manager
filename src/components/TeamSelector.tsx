@@ -2,7 +2,8 @@ import React from 'react';
 import { motion } from 'framer-motion';
 import { CheckIcon } from '@heroicons/react/24/outline';
 import { TeamType } from '../types';
-import { useTeamsStore } from '../store/useTeamsStore';
+import { useLocalDataStore } from '../store/useLocalDataStore';
+// Migration désactivée - faite dans App.tsx
 
 interface TeamSelectorProps {
   selectedTeam: TeamType | null;
@@ -21,7 +22,9 @@ export default function TeamSelector({
   selectedModules = [],
   templates = []
 }: TeamSelectorProps) {
-  const { teams } = useTeamsStore();
+  const { data: localData } = useLocalDataStore();
+  
+  // Migration automatique des données au chargement - désactivé (fait dans App.tsx)
 
   const getSelectedCountForTeam = (teamName: TeamType) => {
     if (!templates.length) return 0;
@@ -49,7 +52,7 @@ export default function TeamSelector({
             {selectedTeam === null && <CheckIcon className="w-4 h-4" />}
           </button>
         )}
-        {teams.map((team) => {
+        {localData.teams.map((team) => {
           const selectedCount = getSelectedCountForTeam(team.name);
           return (
             <motion.button

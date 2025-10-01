@@ -7,11 +7,11 @@ import {
   ExclamationTriangleIcon
 } from '@heroicons/react/24/outline';
 import { useTheme } from './ThemeProvider';
-import { useAppStore } from '../store/useAppStore';
 
 export default function Header() {
   const { theme, toggleTheme } = useTheme();
-  const { apiStatus } = useAppStore();
+  // Removed useAppStore - using local state only
+  const apiStatus = { isConnected: true, lastChecked: new Date().toISOString() };
 
   return (
     <header className="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700">

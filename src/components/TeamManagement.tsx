@@ -1,16 +1,17 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   PlusIcon,
   TrashIcon,
   PencilIcon,
   XMarkIcon,
-  ChartBarIcon
+  ChartBarIcon,
+  DocumentPlusIcon
 } from '@heroicons/react/24/outline';
 import { Team, TeamType } from '../types';
-import { useTeamsStore } from '../store/useTeamsStore';
-import { useModuleTemplatesStore } from '../store/useModuleTemplatesStore';
-import { useAppStore } from '../store/useAppStore';
+import { useLocalDataStore } from '../store/useLocalDataStore';
+// Migration désactivée - faite dans App.tsx
 import TeamStats from './TeamStats';
 
 const AVAILABLE_COLORS = [
@@ -24,11 +25,38 @@ const AVAILABLE_ICONS = [
   '🛡️', '🌐', '📱', '💾', '🔍', '📈', '🎨', '⚡', '🔐', '📝'
 ];
 
+// Fonction pour générer un trigramme à partir du nom
+const generateTrigramme = (name: string): string => {
+  if (!name || name.trim().length === 0) return '';
+  
+  const words = name.trim().split(/\s+/);
+  
+  if (words.length === 1) {
+    // Un seul mot : prendre les 3 premières lettres
+    return words[0].substring(0, 3).toUpperCase();
+  } else if (words.length === 2) {
+    // Deux mots : première lettre du premier + 2 premières du second
+    return (words[0][0] + words[1].substring(0, 2)).toUpperCase();
+  } else {
+    // Plus de 2 mots : première lettre de chaque mot
+    return words.map(word => word[0]).join('').substring(0, 3).toUpperCase();
+  }
+};
+
+// Fonction pour valider un trigramme
+const validateTrigramme = (trigramme: string): boolean => {
+  if (!trigramme || trigramme.length !== 3) return false;
+  return /^[A-Z]{3}$/.test(trigramme);
+};
+
 
 export default function TeamManagement() {
-  const { teams, addTeam, updateTeam, deleteTeam, resetTeams, validateTrigramme, generateTrigramme } = useTeamsStore();
-  const { templates, updateTemplate } = useModuleTemplatesStore();
-  const { projects, updateProject } = useAppStore();
+  const { data: localData, addTeam, updateTeam, deleteTeam, updateTemplate } = useLocalDataStore();
+  
+  // Migration automatique des données au chargement - désactivé (fait dans App.tsx)
+  // Les templates sont maintenant dans le stockage local
+  // Removed useAppStore - using local data only
+  const { projects, moduleTemplates: templates } = localData;
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingTeam, setEditingTeam] = useState<Team | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<Team | null>(null);
@@ -44,17 +72,26 @@ export default function TeamManagement() {
     trigramme: ''
   });
 
+  const [teamName, setTeamName] = useState('');
+
+
   const handleAddTeam = () => {
-    if (!formData.name.trim()) return;
+    console.log('🔍 handleAddTeam called, teamName:', teamName);
+    if (!teamName.trim()) {
+      console.log('⚠️ No team name provided');
+      return;
+    }
     
     // Valider le trigramme
     if (!validateTrigramme(formData.trigramme)) {
+      console.log('⚠️ Trigramme validation failed');
       setTrigrammeError('Le trigramme doit faire exactement 3 lettres majuscules et être unique');
       return;
     }
     
+    console.log('✅ Adding team:', { name: teamName, trigramme: formData.trigramme });
     addTeam({
-      name: formData.name as TeamType,
+      name: teamName as TeamType,
       description: formData.description,
       color: formData.color,
       icon: formData.icon,
@@ -68,12 +105,13 @@ export default function TeamManagement() {
       icon: '🏗️',
       trigramme: ''
     });
+    setTeamName('');
     setTrigrammeError('');
     setShowAddForm(false);
   };
 
   const handleEditTeam = () => {
-    if (!editingTeam || !formData.name.trim()) return;
+    if (!editingTeam || !teamName.trim()) return;
     
     // Valider le trigramme
     if (!validateTrigramme(formData.trigramme, editingTeam.id)) {
@@ -82,7 +120,7 @@ export default function TeamManagement() {
     }
     
     const oldTeamName = editingTeam.name;
-    const newTeamName = formData.name as TeamType;
+    const newTeamName = teamName as TeamType;
     
     // Mettre à jour l'équipe
     updateTeam(editingTeam.id, {
@@ -145,6 +183,7 @@ export default function TeamManagement() {
 
   const startEdit = (team: Team) => {
     setEditingTeam(team);
+    setTeamName(team.name);
     setFormData({
       name: team.name,
       description: team.description,
@@ -152,6 +191,7 @@ export default function TeamManagement() {
       icon: team.icon,
       trigramme: team.trigramme
     });
+    setTrigrammeError('');
     setShowAddForm(true);
   };
 
@@ -213,7 +253,7 @@ export default function TeamManagement() {
       {/* Teams Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         <AnimatePresence>
-          {teams.map((team) => (
+          {localData.teams.map((team) => (
             <motion.div
               key={team.id}
               initial={{ opacity: 0, scale: 0.9 }}
@@ -251,17 +291,24 @@ export default function TeamManagement() {
                 </div>
               </div>
 
-              {/* Team Info */}
-              <div className="p-4 relative min-h-[80px]">
-                <div className="text-sm text-gray-500 dark:text-gray-400 pr-12">
-                  {team.description}
-                </div>
+              {/* Team Actions */}
+              <div className="p-4 flex justify-between items-center">
+                <Link
+                  to={`/module-templates?team=${encodeURIComponent(team.name)}`}
+                  className="flex items-center space-x-2 px-3 py-2 text-sm text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
+                  title="Créer un module pour cette équipe"
+                >
+                  <DocumentPlusIcon className="w-4 h-4" />
+                  <span>Créer un module</span>
+                </Link>
+                
                 <button
                   onClick={() => setShowDeleteConfirm(team)}
-                  className="absolute bottom-4 right-4 p-1.5 rounded-full bg-red-500 bg-opacity-20 hover:bg-opacity-30 transition-colors"
+                  className="flex items-center space-x-2 px-3 py-2 text-sm text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
                   title="Supprimer l'équipe"
                 >
-                  <TrashIcon className="w-4 h-4 text-red-500" />
+                  <TrashIcon className="w-4 h-4" />
+                  <span>Supprimer</span>
                 </button>
               </div>
             </motion.div>
@@ -288,18 +335,16 @@ export default function TeamManagement() {
                 </label>
                 <input
                   type="text"
-                  value={formData.name}
+                  value={teamName}
                   onChange={(e) => {
-                    const newName = e.target.value;
-                    setFormData({ 
-                      ...formData, 
-                      name: newName,
-                      // Générer automatiquement le trigramme si le champ est vide
-                      trigramme: formData.trigramme || generateTrigramme(newName)
-                    });
+                    setTeamName(e.target.value);
+                    setFormData(prev => ({ 
+                      ...prev, 
+                      name: e.target.value
+                    }));
                   }}
                   placeholder="Ex: Infrastructure"
-                  className="input-field"
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                 />
               </div>
 
@@ -317,17 +362,28 @@ export default function TeamManagement() {
                       setTrigrammeError('');
                     }}
                     placeholder="Ex: INF"
-                    className={`input-field flex-1 ${trigrammeError ? 'border-red-500' : ''}`}
+                    className={`w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 flex-1 ${trigrammeError ? 'border-red-500' : ''}`}
                     maxLength={3}
                   />
                   <button
                     type="button"
                     onClick={() => {
-                      const generated = generateTrigramme(formData.name);
-                      setFormData({ ...formData, trigramme: generated });
-                      setTrigrammeError('');
+                      console.log('🔍 Auto button clicked, teamName:', teamName);
+                      if (teamName.trim()) {
+                        const generated = generateTrigramme(teamName);
+                        console.log('🔍 Generated trigramme:', generated);
+                        setFormData({ ...formData, trigramme: generated });
+                        setTrigrammeError('');
+                      } else {
+                        console.log('⚠️ No team name provided');
+                      }
                     }}
-                    className="px-3 py-2 text-sm bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+                    disabled={!teamName.trim()}
+                    className={`px-3 py-2 text-sm rounded-lg transition-colors ${
+                      !teamName.trim() 
+                        ? 'bg-gray-50 dark:bg-gray-800 text-gray-400 dark:text-gray-600 cursor-not-allowed' 
+                        : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                    }`}
                     title="Générer automatiquement"
                   >
                     Auto
@@ -350,7 +406,7 @@ export default function TeamManagement() {
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                   placeholder="Description de l'équipe..."
                   rows={3}
-                  className="input-field"
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                 />
               </div>
 
@@ -401,7 +457,7 @@ export default function TeamManagement() {
               </button>
               <button
                 onClick={editingTeam ? handleEditTeam : handleAddTeam}
-                disabled={!formData.name.trim()}
+                disabled={!teamName.trim()}
                 className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {editingTeam ? 'Modifier' : 'Ajouter'}
