@@ -46,11 +46,11 @@ RUN mkdir -p /app/data && chown -R nextjs:nodejs /app/data
 USER nextjs
 
 # Exposer le port
-EXPOSE 3001
+EXPOSE 3020
 
 # Variables d'environnement
 ENV NODE_ENV=production
-ENV PORT=3001
+ENV PORT=3020
 
 # Utiliser dumb-init pour gérer les signaux correctement
 ENTRYPOINT ["dumb-init", "--"]

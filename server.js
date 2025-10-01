@@ -52,16 +52,42 @@ app.post('/api/save-data', (req, res) => {
 // Route pour charger les données
 app.get('/api/load-data', (req, res) => {
   try {
-    const teams = JSON.parse(fs.readFileSync(path.join(dataDir, 'teams.json'), 'utf8'));
-    const moduleTemplates = JSON.parse(fs.readFileSync(path.join(dataDir, 'module-templates.json'), 'utf8'));
-    const projects = JSON.parse(fs.readFileSync(path.join(dataDir, 'projects.json'), 'utf8'));
-    const metadata = JSON.parse(fs.readFileSync(path.join(dataDir, 'metadata.json'), 'utf8'));
+    // Vérifier si les fichiers existent, sinon retourner des données par défaut
+    let teams = [];
+    let moduleTemplates = [];
+    let projects = [];
+    let lastSync = null;
+
+    try {
+      teams = JSON.parse(fs.readFileSync(path.join(dataDir, 'teams.json'), 'utf8'));
+    } catch (e) {
+      console.log('📝 Fichier teams.json non trouvé, utilisation des données par défaut');
+    }
+
+    try {
+      moduleTemplates = JSON.parse(fs.readFileSync(path.join(dataDir, 'module-templates.json'), 'utf8'));
+    } catch (e) {
+      console.log('📝 Fichier module-templates.json non trouvé, utilisation des données par défaut');
+    }
+
+    try {
+      projects = JSON.parse(fs.readFileSync(path.join(dataDir, 'projects.json'), 'utf8'));
+    } catch (e) {
+      console.log('📝 Fichier projects.json non trouvé, utilisation des données par défaut');
+    }
+
+    try {
+      const metadata = JSON.parse(fs.readFileSync(path.join(dataDir, 'metadata.json'), 'utf8'));
+      lastSync = metadata.lastSync;
+    } catch (e) {
+      console.log('📝 Fichier metadata.json non trouvé');
+    }
     
     res.json({
       teams,
       moduleTemplates,
       projects,
-      lastSync: metadata.lastSync
+      lastSync
     });
   } catch (error) {
     console.error('❌ Erreur lors du chargement:', error);
