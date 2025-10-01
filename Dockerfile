@@ -10,6 +10,15 @@ WORKDIR /app
 # Cloner le repository GitHub
 RUN git clone https://github.com/provectio/plane-manager.git .
 
+# Créer le fichier .env.production avec des valeurs par défaut
+RUN echo "# Configuration de production pour Plane Manager" > .env.production && \
+    echo "VITE_PLANE_API_ENDPOINT=https://plane.provect.io" >> .env.production && \
+    echo "VITE_PLANE_API_KEY=your_plane_api_key_here" >> .env.production && \
+    echo "VITE_PLANE_WORKSPACE_SLUG_FRONTEND=your_workspace_slug_here" >> .env.production && \
+    echo "NODE_ENV=production" >> .env.production && \
+    echo "PORT=3020" >> .env.production && \
+    echo "COMPOSE_PROJECT_NAME=plane-manager" >> .env.production
+
 # Installer toutes les dépendances (y compris dev dependencies pour le build)
 RUN npm ci
 
