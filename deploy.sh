@@ -9,9 +9,11 @@ set -e
 REPO_URL="https://github.com/provectio/plane-manager.git"
 APP_NAME="plane-manager"
 ENVIRONMENT=${1:-production}
+DEPLOY_DIR="/opt/plane-manager"
 
 echo "🚀 Déploiement de Plane Manager - Environnement: $ENVIRONMENT"
 echo "📦 Repository: $REPO_URL"
+echo "📁 Répertoire de déploiement: $DEPLOY_DIR"
 
 # Vérifier que Docker est installé
 if ! command -v docker &> /dev/null; then
@@ -26,9 +28,6 @@ if ! command -v docker-compose &> /dev/null; then
 fi
 
 # Créer le répertoire de déploiement s'il n'existe pas
-DEPLOY_DIR="/opt/plane-manager"
-echo "📁 Répertoire de déploiement: $DEPLOY_DIR"
-
 if [ ! -d "$DEPLOY_DIR" ]; then
     echo "📂 Création du répertoire de déploiement..."
     sudo mkdir -p "$DEPLOY_DIR"
@@ -48,11 +47,7 @@ fi
 # Copier les fichiers de configuration si nécessaire
 if [ ! -f "$DEPLOY_DIR/.env.production" ]; then
     echo "⚙️  Création du fichier de configuration de production..."
-    if [ -f "$DEPLOY_DIR/env.production.example" ]; then
-        sudo cp "$DEPLOY_DIR/env.production.example" "$DEPLOY_DIR/.env.production"
-    else
-        echo "📝 Création du fichier .env.production par défaut..."
-        sudo tee "$DEPLOY_DIR/.env.production" > /dev/null <<EOF
+    sudo tee "$DEPLOY_DIR/.env.production" > /dev/null <<EOF
 # Configuration de production pour Plane Manager
 VITE_PLANE_API_ENDPOINT=https://plane.provect.io
 VITE_PLANE_API_KEY=your_plane_api_key_here
@@ -61,42 +56,36 @@ NODE_ENV=production
 PORT=3020
 COMPOSE_PROJECT_NAME=plane-manager
 EOF
-    fi
     echo "📝 Veuillez configurer le fichier .env.production avec vos paramètres"
 fi
 
 # Arrêter les conteneurs existants
 echo "🛑 Arrêt des conteneurs existants..."
-sudo docker-compose -f docker-compose.prod.yml down || true
-
-# Charger les variables d'environnement
-if [ -f ".env.production" ]; then
-    echo "📋 Chargement des variables d'environnement..."
-    export $(grep -v '^#' .env.production | xargs)
-fi
+sudo docker-compose down || true
 
 # Construire et démarrer les nouveaux conteneurs
 echo "🔨 Construction et démarrage des conteneurs..."
-sudo docker-compose -f docker-compose.prod.yml up -d --build
+sudo docker-compose up -d --build
 
 # Attendre que les services soient prêts
 echo "⏳ Attente du démarrage des services..."
-sleep 10
+sleep 15
 
 # Vérifier le statut des conteneurs
 echo "📊 Statut des conteneurs:"
-sudo docker-compose -f docker-compose.prod.yml ps
+sudo docker-compose ps
 
 # Vérifier la santé de l'application
 echo "🏥 Vérification de la santé de l'application..."
-if curl -f http://localhost:3020/ > /dev/null 2>&1; then
+if curl -f http://localhost:3020/health > /dev/null 2>&1; then
     echo "✅ Application démarrée avec succès!"
     echo "🌐 Application accessible sur: http://localhost:3020"
     echo "🔧 API accessible sur: http://localhost:3020/api/"
+    echo "🏥 Health check: http://localhost:3020/health"
 else
     echo "❌ L'application ne répond pas correctement"
     echo "📋 Logs des conteneurs:"
-    sudo docker-compose -f docker-compose.prod.yml logs --tail=50
+    sudo docker-compose logs --tail=50
     exit 1
 fi
 
@@ -110,9 +99,9 @@ echo "   - Repository: $REPO_URL"
 echo "   - Répertoire: $DEPLOY_DIR"
 echo ""
 echo "🔧 Commandes utiles:"
-echo "   - Voir les logs: sudo docker-compose -f docker-compose.prod.yml logs -f"
-echo "   - Redémarrer: sudo docker-compose -f docker-compose.prod.yml restart"
-echo "   - Arrêter: sudo docker-compose -f docker-compose.prod.yml down"
+echo "   - Voir les logs: sudo docker-compose logs -f"
+echo "   - Redémarrer: sudo docker-compose restart"
+echo "   - Arrêter: sudo docker-compose down"
 echo "   - Mettre à jour: ./deploy.sh"
 echo ""
 echo "📁 Données persistantes:"

@@ -1,97 +1,88 @@
 #!/bin/bash
 
-# Script de configuration pour Plane Manager
+# Script de configuration interactive pour Plane Manager
 # Usage: ./configure.sh
 
 set -e
 
-DEPLOY_DIR="/opt/plane-manager"
-ENV_FILE="$DEPLOY_DIR/.env.production"
+ENV_FILE=".env.production"
+BACKUP_FILE=".env.production.bak"
 
-echo "⚙️  Configuration de Plane Manager"
-echo "📁 Fichier de configuration: $ENV_FILE"
+echo "⚙️  Configuration des variables d'environnement pour Plane Manager"
+echo "=================================================================="
 
-# Vérifier que le fichier existe
-if [ ! -f "$ENV_FILE" ]; then
-    echo "❌ Fichier de configuration non trouvé: $ENV_FILE"
-    echo "💡 Lancez d'abord ./deploy.sh pour créer le fichier de configuration"
+# Vérifier que nous sommes dans le bon répertoire
+if [ ! -f "docker-compose.yml" ]; then
+    echo "❌ Ce script doit être exécuté dans le répertoire du projet"
     exit 1
 fi
 
-echo ""
-echo "🔧 Configuration des variables d'environnement"
-echo ""
-
-# Fonction pour demander une valeur avec valeur par défaut
-ask_value() {
-    local var_name=$1
-    local description=$2
-    local default_value=$3
-    
-    echo -n "📝 $description"
-    if [ -n "$default_value" ]; then
-        echo -n " (défaut: $default_value)"
-    fi
-    echo -n ": "
-    
-    read -r value
-    if [ -z "$value" ] && [ -n "$default_value" ]; then
-        value="$default_value"
-    fi
-    
-    echo "$var_name=$value"
-}
-
-# Configuration interactive
-echo "🌐 Configuration de l'API Plane.so"
-echo ""
-
-# Endpoint API
-current_endpoint=$(grep "^VITE_PLANE_API_ENDPOINT=" "$ENV_FILE" | cut -d'=' -f2- || echo "https://plane.provect.io")
-new_endpoint=$(ask_value "VITE_PLANE_API_ENDPOINT" "Endpoint de l'API Plane.so" "$current_endpoint")
-
-# Clé API
-current_key=$(grep "^VITE_PLANE_API_KEY=" "$ENV_FILE" | cut -d'=' -f2- || echo "your_plane_api_key_here")
-new_key=$(ask_value "VITE_PLANE_API_KEY" "Clé API Plane.so" "$current_key")
-
-# Workspace slug
-current_slug=$(grep "^VITE_PLANE_WORKSPACE_SLUG_FRONTEND=" "$ENV_FILE" | cut -d'=' -f2- || echo "your_workspace_slug_here")
-new_slug=$(ask_value "VITE_PLANE_WORKSPACE_SLUG_FRONTEND" "Slug du workspace Plane.so" "$current_slug")
+# Sauvegarder l'ancien fichier si existant
+if [ -f "$ENV_FILE" ]; then
+    echo "💾 Sauvegarde de la configuration existante vers $BACKUP_FILE"
+    cp "$ENV_FILE" "$BACKUP_FILE"
+fi
 
 echo ""
-echo "💾 Sauvegarde de la configuration..."
+echo "📝 Veuillez saisir les informations de configuration:"
+echo ""
 
-# Créer une sauvegarde
-cp "$ENV_FILE" "$ENV_FILE.backup.$(date +%Y%m%d-%H%M%S)"
+# Demander les variables
+read -p "🌐 Endpoint de l'API Plane.so (ex: https://plane.provect.io): " VITE_PLANE_API_ENDPOINT_INPUT
+read -p "🔑 Clé API Plane.so: " VITE_PLANE_API_KEY_INPUT
+read -p "📁 Slug du workspace Plane.so (frontend): " VITE_PLANE_WORKSPACE_SLUG_FRONTEND_INPUT
+read -p "🔌 Port du serveur (par défaut 3020): " PORT_INPUT
+PORT_INPUT=${PORT_INPUT:-3020} # Valeur par défaut
 
-# Mettre à jour le fichier
+# Validation basique
+if [ -z "$VITE_PLANE_API_ENDPOINT_INPUT" ]; then
+    echo "❌ L'endpoint API est requis"
+    exit 1
+fi
+
+if [ -z "$VITE_PLANE_API_KEY_INPUT" ]; then
+    echo "❌ La clé API est requise"
+    exit 1
+fi
+
+if [ -z "$VITE_PLANE_WORKSPACE_SLUG_FRONTEND_INPUT" ]; then
+    echo "❌ Le slug du workspace est requis"
+    exit 1
+fi
+
+# Écrire le nouveau fichier .env.production
+echo ""
+echo "💾 Création du fichier de configuration..."
+
 cat > "$ENV_FILE" << EOF
 # Configuration de production pour Plane Manager
-# Générée le $(date)
+# Généré le $(date)
 
-# Configuration Plane.so API
-VITE_PLANE_API_ENDPOINT=$new_endpoint
-VITE_PLANE_API_KEY=$new_key
-VITE_PLANE_WORKSPACE_SLUG_FRONTEND=$new_slug
+# Configuration Plane.so
+VITE_PLANE_API_ENDPOINT=${VITE_PLANE_API_ENDPOINT_INPUT}
+VITE_PLANE_API_KEY=${VITE_PLANE_API_KEY_INPUT}
+VITE_PLANE_WORKSPACE_SLUG_FRONTEND=${VITE_PLANE_WORKSPACE_SLUG_FRONTEND_INPUT}
 
 # Configuration serveur
 NODE_ENV=production
-PORT=3020
+PORT=${PORT_INPUT}
+COMPOSE_PROJECT_NAME=plane-manager
 
 # Configuration Docker
-COMPOSE_PROJECT_NAME=plane-manager
+DOCKER_BUILDKIT=1
+COMPOSE_DOCKER_CLI_BUILD=1
 EOF
 
-echo "✅ Configuration sauvegardée!"
+echo "✅ Fichier $ENV_FILE créé et configuré avec succès !"
 echo ""
 echo "📋 Configuration actuelle:"
-echo "   - Endpoint API: $new_endpoint"
-echo "   - Clé API: ${new_key:0:10}..."
-echo "   - Workspace: $new_slug"
+echo "=================================================================="
+cat "$ENV_FILE"
+echo "=================================================================="
 echo ""
-echo "🔄 Pour appliquer la configuration:"
-echo "   sudo docker-compose -f docker-compose.prod.yml down"
-echo "   sudo docker-compose -f docker-compose.prod.yml up -d"
+echo "🚀 Prochaines étapes:"
+echo "   1. Vérifiez la configuration ci-dessus"
+echo "   2. Lancez le déploiement avec: ./deploy.sh"
+echo "   3. Ou mettez à jour avec: ./update.sh"
 echo ""
-echo "💡 Ou utilisez le script de mise à jour:"
-echo "   sudo ./update.sh"
+echo "💡 Pour modifier la configuration plus tard, relancez ce script"

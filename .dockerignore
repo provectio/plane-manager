@@ -1,17 +1,43 @@
-# Dépendances
+# Dependencies
 node_modules
 npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
 
-# Build
+# Build outputs
 dist
 build
+.next
 
-# Environnement
+# Environment files
 .env
 .env.local
 .env.development.local
 .env.test.local
 .env.production.local
+
+# IDE files
+.vscode
+.idea
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Git
+.git
+.gitignore
+
+# Docker
+Dockerfile
+docker-compose*.yml
+.dockerignore
+
+# Documentation
+README.md
+*.md
 
 # Logs
 logs
@@ -44,40 +70,34 @@ jspm_packages/
 # Yarn Integrity file
 .yarn-integrity
 
-# dotenv environment variables file
-.env
+# parcel-bundler cache (https://parceljs.org/)
+.cache
+.parcel-cache
 
-# IDE
-.vscode
-.idea
-*.swp
-*.swo
+# next.js build output
+.next
 
-# OS
-.DS_Store
-Thumbs.db
+# nuxt.js build output
+.nuxt
 
-# Git
-.git
-.gitignore
+# vuepress build output
+.vuepress/dist
 
-# Docker
-Dockerfile
-docker-compose.yml
-.dockerignore
+# Serverless directories
+.serverless
 
-# Documentation
-README.md
-*.md
+# FuseBox cache
+.fusebox/
 
-# Tests
-test
-tests
-__tests__
+# DynamoDB Local files
+.dynamodb/
 
-# Temporary files
-tmp
-temp
+# TernJS port file
+.tern-port
 
-# Data directory (sera monté comme volume)
-data
+# Stores VSCode versions used for testing VSCode extensions
+.vscode-test
+
+# Temporary folders
+tmp/
+temp/

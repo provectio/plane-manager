@@ -1,6 +1,6 @@
 /**
- * Serveur simple pour écrire directement dans les fichiers JSON
- * Ce serveur permet d'écrire dans les fichiers du répertoire data/
+ * Serveur Express pour Plane Manager
+ * Sert l'application React et l'API backend
  */
 
 import express from 'express';
@@ -17,10 +17,7 @@ const PORT = process.env.PORT || 3020;
 
 // Middleware
 app.use(cors());
-app.use(express.json());
-
-// Servir les fichiers statiques de l'application React
-app.use(express.static(path.join(__dirname, 'dist')));
+app.use(express.json({ limit: '10mb' }));
 
 // Créer le répertoire data s'il n'existe pas
 const dataDir = path.join(__dirname, 'data');
@@ -97,6 +94,9 @@ const initializeDefaultData = () => {
 // Initialiser les données au démarrage
 initializeDefaultData();
 
+// Servir les fichiers statiques de l'application React
+app.use(express.static(path.join(__dirname, 'dist')));
+
 // Route pour sauvegarder les données
 app.post('/api/save-data', (req, res) => {
   try {
@@ -167,18 +167,26 @@ app.get('/api/load-data', (req, res) => {
   }
 });
 
-// Route pour servir l'application React (SPA) - catch-all pour les routes non-API
-app.use((req, res, next) => {
-  // Si ce n'est pas une route API, servir l'application React
-  if (!req.path.startsWith('/api/')) {
-    return res.sendFile(path.join(__dirname, 'dist', 'index.html'));
-  }
-  next();
+// Route de santé pour les health checks
+app.get('/health', (req, res) => {
+  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+// Route catch-all pour servir l'application React (SPA)
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, 'dist', 'index.html'));
+});
+
+// Gestionnaire d'erreurs global
+app.use((err, req, res, next) => {
+  console.error('❌ Erreur serveur:', err);
+  res.status(500).json({ success: false, error: 'Erreur interne du serveur' });
 });
 
 // Démarrer le serveur
 app.listen(PORT, () => {
-  console.log(`🚀 Serveur de données démarré sur le port ${PORT}`);
+  console.log(`🚀 Serveur Plane Manager démarré sur le port ${PORT}`);
   console.log(`📁 Répertoire de données: ${dataDir}`);
   console.log(`🌐 Application accessible sur: http://localhost:${PORT}`);
+  console.log(`🔧 API accessible sur: http://localhost:${PORT}/api/`);
 });

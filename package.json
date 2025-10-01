@@ -10,7 +10,10 @@
     "preview": "vite preview",
     "setup": "node setup.js",
     "server": "node server.js",
-    "dev:full": "concurrently \"npm run server\" \"npm run dev\""
+    "dev:full": "concurrently \"npm run server\" \"npm run dev\"",
+    "start": "node server.js",
+    "docker:build": "docker build -t plane-manager .",
+    "docker:run": "docker run -p 3020:3020 plane-manager"
   },
   "dependencies": {
     "@apollo/client": "^3.8.7",
