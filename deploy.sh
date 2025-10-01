@@ -48,17 +48,30 @@ fi
 # Copier les fichiers de configuration si nécessaire
 if [ ! -f "$DEPLOY_DIR/.env.production" ]; then
     echo "⚙️  Création du fichier de configuration de production..."
-    sudo cp "$DEPLOY_DIR/.env.example" "$DEPLOY_DIR/.env.production"
+    if [ -f "$DEPLOY_DIR/env.production.example" ]; then
+        sudo cp "$DEPLOY_DIR/env.production.example" "$DEPLOY_DIR/.env.production"
+    else
+        echo "📝 Création du fichier .env.production par défaut..."
+        sudo tee "$DEPLOY_DIR/.env.production" > /dev/null <<EOF
+# Configuration de production pour Plane Manager
+VITE_PLANE_API_ENDPOINT=https://plane.provect.io
+VITE_PLANE_API_KEY=your_plane_api_key_here
+VITE_PLANE_WORKSPACE_SLUG_FRONTEND=your_workspace_slug_here
+NODE_ENV=production
+PORT=3020
+COMPOSE_PROJECT_NAME=plane-manager
+EOF
+    fi
     echo "📝 Veuillez configurer le fichier .env.production avec vos paramètres"
 fi
 
 # Arrêter les conteneurs existants
 echo "🛑 Arrêt des conteneurs existants..."
-sudo docker-compose down || true
+sudo docker-compose -f docker-compose.prod.yml down || true
 
 # Construire et démarrer les nouveaux conteneurs
 echo "🔨 Construction et démarrage des conteneurs..."
-sudo docker-compose up -d --build
+sudo docker-compose -f docker-compose.prod.yml up -d --build
 
 # Attendre que les services soient prêts
 echo "⏳ Attente du démarrage des services..."
@@ -66,7 +79,7 @@ sleep 10
 
 # Vérifier le statut des conteneurs
 echo "📊 Statut des conteneurs:"
-sudo docker-compose ps
+sudo docker-compose -f docker-compose.prod.yml ps
 
 # Vérifier la santé de l'application
 echo "🏥 Vérification de la santé de l'application..."
@@ -77,7 +90,7 @@ if curl -f http://localhost:3020/api/load-data > /dev/null 2>&1; then
 else
     echo "❌ L'application ne répond pas correctement"
     echo "📋 Logs des conteneurs:"
-    sudo docker-compose logs --tail=50
+    sudo docker-compose -f docker-compose.prod.yml logs --tail=50
     exit 1
 fi
 
@@ -91,9 +104,9 @@ echo "   - Repository: $REPO_URL"
 echo "   - Répertoire: $DEPLOY_DIR"
 echo ""
 echo "🔧 Commandes utiles:"
-echo "   - Voir les logs: sudo docker-compose logs -f"
-echo "   - Redémarrer: sudo docker-compose restart"
-echo "   - Arrêter: sudo docker-compose down"
+echo "   - Voir les logs: sudo docker-compose -f docker-compose.prod.yml logs -f"
+echo "   - Redémarrer: sudo docker-compose -f docker-compose.prod.yml restart"
+echo "   - Arrêter: sudo docker-compose -f docker-compose.prod.yml down"
 echo "   - Mettre à jour: ./deploy.sh"
 echo ""
 echo "📁 Données persistantes:"
